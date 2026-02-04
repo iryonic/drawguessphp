@@ -1,0 +1,626 @@
+const player = JSON.parse(localStorage.getItem('dg_player') || '{}');
+if (!player.token) window.location.href = 'index.php';
+
+const roomCodeDisplay = document.getElementById('room-code-display');
+const playerList = document.getElementById('player-list');
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const chatBox = document.getElementById('chat-box');
+const overlay = document.getElementById('overlay');
+const wordDisplay = document.getElementById('word-display');
+const timerEl = document.getElementById('timer');
+const timerProgress = document.getElementById('timer-progress'); // SVG Circle
+const turnNotif = document.getElementById('turn-notification');
+
+// Mobile Tabs
+const tabBtns = {
+    draw: document.getElementById('tab-draw'),
+    chat: document.getElementById('tab-chat'),
+    rank: document.getElementById('tab-rank')
+};
+const views = {
+    draw: document.getElementById('view-draw'),
+    chat: document.getElementById('view-chat'),
+    rank: document.getElementById('view-rank')
+};
+
+// Game State
+let gameState = {
+    status: 'lobby',
+    roundId: 0,
+    lastStrokeId: parseInt(sessionStorage.getItem('dg_lastStrokeId') || '0'),
+    lastMsgId: parseInt(sessionStorage.getItem('dg_lastMsgId') || '0'),
+    isDrawer: false,
+    color: '#000000',
+    size: 5,
+    myTurn: false,
+    endTime: 0,
+    totalTime: 60
+};
+
+// ...
+
+// Update persist
+function updatePersist() {
+    sessionStorage.setItem('dg_lastStrokeId', gameState.lastStrokeId);
+    sessionStorage.setItem('dg_lastMsgId', gameState.lastMsgId);
+}
+
+// ... in syncState ...
+if (!res.data) return;
+const data = res.data;
+
+if (data.round.id != gameState.roundId) {
+    if (data.round.id > 0 && data.round.id > gameState.roundId) {
+        // New Round Logic - Clear persistence for strokes to fetch new round correctly?
+        // Actually if round ID changes, we should reset lastStrokeId naturally?
+        // But we might be mid-round on refresh.
+        if (gameState.roundId !== 0) { // Real change while running
+            try { sfx.play('start'); } catch (e) { }
+        }
+        gameState.lastStrokeId = 0; // Reset for new round
+    }
+}
+
+// ... in syncDraw ...
+res.data.strokes.forEach(s => {
+    if (s.id > gameState.lastStrokeId) gameState.lastStrokeId = s.id;
+    // ...
+});
+updatePersist();
+
+// ... in syncChat ...
+res.data.messages.forEach(m => {
+    if (m.id > gameState.lastMsgId) gameState.lastMsgId = m.id;
+    // ...
+});
+updatePersist();
+
+// Canvas State
+let painting = false;
+let pointsBuffer = [];
+let lastPos = { x: 0, y: 0 };
+
+// Local Timer
+let timerInterval = null;
+
+// Init
+roomCodeDisplay.innerText = player.room_code || '????';
+resizeCanvas(); // Initial resize
+
+// Window Resize Handling
+window.addEventListener('resize', resizeCanvas);
+
+function resizeCanvas() {
+    const container = document.getElementById('canvas-container');
+    if (container) {
+        // Make pixel perfect
+        const rect = container.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        // Force redraw if needed (but strokes are cleared on resize usually in simple apps, 
+        // ideally we should repaint all strokes from history, but here we just accept it or wait for sync to fill it back?
+        // Sync fetches "new" strokes. We should ideally keep a local history or clear.
+        // For now, let's just keep it. Resolution change clears canvas content.
+        // We can trigger a "full sync" or just re-render if we stored history.
+        // Simplest: The next syncDraw loop doesn't repaint old ones. 
+        // So resizing wipes the screen for the user until next Round.
+        // Improvement: Store all strokes of current round in a 'strokeHistory' array and redraw on resize.
+    }
+}
+// Store history for redraw
+let strokeHistory = [];
+
+// Listeners
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', endDraw);
+canvas.addEventListener('mouseleave', endDraw);
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent("mousedown", { clientX: touch.clientX, clientY: touch.clientY });
+    canvas.dispatchEvent(mouseEvent);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent("mousemove", { clientX: touch.clientX, clientY: touch.clientY });
+    canvas.dispatchEvent(mouseEvent);
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    const mouseEvent = new MouseEvent("mouseup", {});
+    canvas.dispatchEvent(mouseEvent);
+});
+
+// Polling
+syncState(); // Run immediately
+setInterval(syncState, 2000);
+setInterval(syncDraw, 200);
+setInterval(syncChat, 1000);
+setInterval(sendStrokes, 300);
+
+if (timerInterval) clearInterval(timerInterval);
+timerInterval = setInterval(updateLocalTimer, 1000);
+
+// --- Functions --- //
+
+// Mobile Tab Switching
+function switchTab(tab) {
+    // Buttons
+    Object.values(tabBtns).forEach(btn => {
+        if (btn) {
+            btn.classList.remove('text-indigo-400', 'bg-slate-800');
+            btn.classList.add('text-gray-400', 'hover:bg-gray-800');
+            // Remove active border/styles for mobile nav
+            if (btn.parentElement.tagName === 'NAV') {
+                // Reset styles for mobile nav items (handled by simple classes usually)
+            }
+        }
+    });
+    // Specific styling for mobile nav logic if needed, but relies on onClick mainly
+
+    // Views
+    if (window.innerWidth < 768) {
+        Object.values(views).forEach(v => v ? v.classList.add('hidden') : null);
+        if (views[tab]) views[tab].classList.remove('hidden');
+    }
+}
+
+function updateLocalTimer() {
+    if (gameState.status !== 'drawing') {
+        timerEl.innerText = "--";
+        if (timerProgress) timerProgress.style.strokeDashoffset = 0;
+        return;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    let left = gameState.endTime > 0 ? gameState.endTime - now : 0;
+    if (left < 0) left = 0;
+
+    timerEl.innerText = left;
+
+    if (timerProgress) {
+        // Calculate progress based on total time (default 60 if missing)
+        const total = gameState.totalTime || 60;
+        const pct = (left / total);
+        // stroke-dasharray="100, 100" means 100 is full circumference
+        const offset = 100 - (pct * 100);
+        timerProgress.style.strokeDashoffset = offset;
+
+        if (left <= 10 && left > 0) {
+            // Pulse effect
+            timerEl.classList.add('text-red-500');
+            try { sfx.play('tick'); } catch (e) { }
+        } else {
+            timerEl.classList.remove('text-red-500');
+        }
+    }
+}
+
+function getNormalizedPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (evt.clientX - rect.left);
+    const y = (evt.clientY - rect.top);
+    // Normalize 0.0 to 1.0
+    return {
+        x: parseFloat((x / canvas.width).toFixed(4)),
+        y: parseFloat((y / canvas.height).toFixed(4))
+    };
+}
+
+function startDraw(e) {
+    if (!gameState.myTurn) return;
+    painting = true;
+    lastPos = getNormalizedPos(e);
+    pointsBuffer = [lastPos];
+
+    // Draw immediately
+    drawDot(lastPos.x, lastPos.y, gameState.color, gameState.size);
+}
+
+function drawDot(nx, ny, color, size) {
+    const x = nx * canvas.width;
+    const y = ny * canvas.height;
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Add to history
+    strokeHistory.push({ type: 'dot', x: nx, y: ny, color, size });
+}
+
+function drawLine(nx1, ny1, nx2, ny2, color, size) {
+    const x1 = nx1 * canvas.width;
+    const y1 = ny1 * canvas.height;
+    const x2 = nx2 * canvas.width;
+    const y2 = ny2 * canvas.height;
+
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = color;
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    strokeHistory.push({ type: 'line', x1: nx1, y1: ny1, x2: nx2, y2: ny2, color, size });
+}
+
+function draw(e) {
+    if (!painting || !gameState.myTurn) return;
+    const pos = getNormalizedPos(e);
+
+    drawLine(lastPos.x, lastPos.y, pos.x, pos.y, gameState.color, gameState.size);
+
+    lastPos = pos;
+    pointsBuffer.push(pos);
+}
+
+function endDraw() {
+    if (!painting) return;
+    painting = false;
+    sendStrokes();
+}
+
+async function sendStrokes() {
+    if (pointsBuffer.length === 0) return;
+
+    const data = {
+        token: player.token,
+        action: 'draw',
+        color: gameState.color,
+        size: gameState.size,
+        points: JSON.stringify(pointsBuffer)
+    };
+
+    pointsBuffer = [];
+
+    await fetch('api/draw_sync.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(data)
+    });
+}
+
+
+async function syncState() {
+    try {
+        const res = await (await fetch('api/game_state.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ token: player.token, action: 'sync' })
+        })).json();
+
+        if (res.data && res.data.room) {
+            // Force update Room Code from server (fixes "????" issue)
+            if (roomCodeDisplay) roomCodeDisplay.innerText = res.data.room.room_code || '????';
+        }
+
+        if (!res.data) {
+            if (res.error) console.error("Sync Error:", res.error);
+            return;
+        }
+        const data = res.data;
+
+        // Round Change Detection
+        if (data.round.id != gameState.roundId) {
+            if (data.round.id > 0 && data.round.id > gameState.roundId) {
+                // Only reset strokes if it's a NEW round
+                gameState.lastStrokeId = 0;
+                strokeHistory = [];
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                updatePersist();
+                if (gameState.roundId !== 0) {
+                    try { sfx.play('start'); } catch (e) { }
+                }
+            }
+            if (data.round.id === 0) {
+                // Lobby probably, or reset
+            }
+        }
+
+        gameState.roundId = data.round.id;
+        gameState.status = data.round.status || 'lobby';
+
+        document.getElementById('game-status-text').innerText = gameState.status;
+        document.getElementById('current-round').innerText = data.room.current_round;
+        document.getElementById('max-rounds').innerText = data.room.max_rounds;
+
+        if (data.round.time_left !== undefined) {
+            const now = Math.floor(Date.now() / 1000);
+            gameState.endTime = now + data.round.time_left;
+            if (data.room.round_duration) gameState.totalTime = parseInt(data.room.round_duration);
+        }
+
+        updatePlayers(data.players, data.round.drawer_id);
+
+        // Turn Logic
+        const isMe = data.me == data.round.drawer_id;
+        const wasMe = gameState.myTurn;
+        gameState.myTurn = (gameState.status === 'drawing' && isMe);
+
+        if (gameState.myTurn && !wasMe && gameState.status === 'drawing') {
+            showTurnNotification();
+            try { sfx.play('start'); } catch (e) { }
+        }
+
+        const tools = document.getElementById('drawing-tools');
+        if (gameState.myTurn) {
+            if (tools) tools.classList.remove('hidden');
+        } else {
+            if (tools) tools.classList.add('hidden');
+        }
+
+        // Overlays
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlay-title');
+        const overlaySubtitle = document.getElementById('overlay-subtitle');
+        const wordSelect = document.getElementById('word-selection');
+        const startBtn = document.getElementById('start-btn');
+
+        if (gameState.status === 'lobby') {
+            overlay.classList.remove('hidden');
+            overlayTitle.innerText = "WAITING FOR PLAYERS";
+            overlaySubtitle.innerText = "Share the room code!";
+            overlaySubtitle.classList.remove('hidden');
+            wordSelect.classList.add('hidden');
+            const mePlayer = data.players.find(p => p.id == data.me);
+            if (mePlayer && mePlayer.is_host == 1) {
+                if (startBtn) startBtn.classList.remove('hidden');
+            } else {
+                if (startBtn) startBtn.classList.add('hidden');
+            }
+        } else if (gameState.status === 'choosing') {
+            overlay.classList.remove('hidden');
+            if (startBtn) startBtn.classList.add('hidden');
+            if (isMe) {
+                overlayTitle.innerText = "IT'S YOUR TURN!";
+                overlaySubtitle.innerText = "Choose a Word to Draw";
+                overlaySubtitle.classList.remove('hidden');
+                wordSelect.innerHTML = '';
+                wordSelect.classList.remove('hidden');
+                if (data.words && wordSelect.children.length === 0) {
+                    data.words.forEach(w => {
+                        const btn = document.createElement('button');
+                        btn.className = "bg-pop-blue hover:bg-sky-300 border-2 border-ink px-6 py-4 rounded-xl text-black font-bold text-lg hover:scale-105 transition shadow-[4px_4px_0px_#000]";
+                        btn.innerText = `${w.word}`;
+                        const badge = w.difficulty == 'easy' ? '🟢' : (w.difficulty == 'medium' ? '🟡' : '🔴');
+                        btn.innerHTML += ` <span class="text-xs ml-2">${badge}</span>`;
+                        btn.onclick = () => selectWord(w.id);
+                        wordSelect.appendChild(btn);
+                    });
+                }
+            } else {
+                overlayTitle.innerText = "DRAWER IS CHOOSING";
+                overlaySubtitle.innerText = "Get ready to guess!";
+                overlaySubtitle.classList.remove('hidden');
+                wordSelect.classList.add('hidden');
+            }
+        } else if (gameState.status === 'drawing') {
+            overlay.classList.add('hidden');
+            if (data.round.word) {
+                wordDisplay.innerText = data.round.word.split('').join(' ');
+            } else {
+                wordDisplay.innerText = "UNKNOWN";
+            }
+
+            if (data.round.id != gameState.roundId) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                strokeHistory = []; // Clear local history
+                gameState.roundId = data.round.id;
+                gameState.lastStrokeId = 0;
+            }
+        } else if (gameState.status === 'ended') {
+            overlay.classList.remove('hidden');
+            overlayTitle.innerText = `ROUND OVER!`;
+            overlaySubtitle.innerText = `The word was: ${data.round.word}`;
+
+            // if (prevStatus !== 'ended') sfx.play('win');
+
+            overlaySubtitle.classList.remove('hidden');
+            wordSelect.classList.add('hidden');
+            startBtn.classList.add('hidden');
+
+            const meP = data.players.find(p => p.id == data.me);
+            if (meP && meP.is_host == 1) {
+                startBtn.innerText = "Start Next Round";
+                startBtn.classList.remove('hidden');
+            }
+        }
+    } catch (e) { console.error(e); }
+}
+
+function showTurnNotification() {
+    turnNotif.classList.remove('opacity-0');
+    setTimeout(() => {
+        turnNotif.classList.add('opacity-0');
+    }, 3000);
+}
+
+function updatePlayers(players, drawerId) {
+    const lists = [document.getElementById('player-list'), document.getElementById('player-list-mobile')];
+
+    // Sort players
+    players.sort((a, b) => b.score - a.score);
+
+    lists.forEach(list => {
+        if (!list) return;
+        list.innerHTML = '';
+        players.forEach((p, index) => {
+            const isDrawer = p.id == drawerId;
+            const div = document.createElement('div');
+            // Compact Ranking with trophy for #1
+            const rank = index === 0 ? '👑' : (index + 1);
+            div.className = `p-3 rounded-xl flex items-center gap-3 transition-all border-2 ${isDrawer ? 'border-pop-yellow bg-yellow-50 shadow-sm' : 'border-gray-200 bg-white'}`;
+            div.innerHTML = `
+                <div class="font-bold text-gray-500 w-5 text-center text-sm">${rank}</div>
+                <div class="text-2xl">${p.avatar}</div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-bold text-sm md:text-base flex justify-between items-center truncate">
+                        <span class="truncate text-ink">${p.username}</span>
+                        ${isDrawer ? '<span class="text-xs ml-1 bg-yellow-300 px-1 rounded border border-black">✏️</span>' : ''}
+                    </div>
+                    <div class="text-xs text-indigo-500 font-mono font-bold">${p.score} pts</div>
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    });
+}
+
+async function selectWord(wid) {
+    try { sfx.play('pop'); } catch (e) { }
+    await fetch('api/game_state.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: player.token, action: 'select_word', word_id: wid })
+    });
+}
+
+async function startGame() {
+    try { sfx.play('pop'); } catch (e) { }
+    await fetch('api/game_state.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: player.token, action: 'start_game' })
+    });
+}
+
+async function syncDraw() {
+    if (gameState.myTurn && gameState.status === 'drawing') return;
+    if (gameState.status !== 'drawing') return;
+
+    try {
+        const res = await (await fetch(`api/draw_sync.php?token=${player.token}&action=fetch&last_id=${gameState.lastStrokeId}`)).json();
+        if (res.data && res.data.strokes) {
+            res.data.strokes.forEach(s => {
+                if (s.id > gameState.lastStrokeId) gameState.lastStrokeId = s.id;
+
+                if (s.color === 'CLEAR') {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    strokeHistory = [];
+                    return;
+                }
+                const points = s.points;
+                if (points.length < 1) return;
+
+                const start = points[0];
+                drawLine(start.x, start.y, start.x, start.y + 0.0001, s.color, s.size);
+                for (let i = 1; i < points.length; i++) {
+                    const p1 = points[i - 1];
+                    const p2 = points[i];
+                    drawLine(p1.x, p1.y, p2.x, p2.y, s.color, s.size);
+                }
+            });
+            updatePersist();
+        }
+    } catch (e) { }
+}
+
+async function syncChat() {
+    try {
+        const res = await (await fetch(`api/chat.php?token=${player.token}&action=fetch&last_id=${gameState.lastMsgId}`)).json();
+        if (res.data && res.data.messages) {
+            res.data.messages.forEach(m => {
+                if (m.id > gameState.lastMsgId) gameState.lastMsgId = m.id;
+
+                const createMsg = () => {
+                    const div = document.createElement('div');
+                    div.className = "chat-msg transition-all duration-300";
+                    if (m.type === 'system' || m.type === 'guess') {
+                        if (m.type === 'guess') try { sfx.play('ding'); } catch (e) { }
+                        div.className = "text-xs text-center font-bold px-3 py-2 rounded-lg border mx-2 my-2 shadow-[2px_2px_0px_#000]";
+                        div.classList.add(m.type === 'guess' ? 'bg-green-100 text-green-800 border-green-800' : 'bg-yellow-100 text-yellow-800 border-yellow-800');
+                        div.innerText = m.type === 'guess' ? `🎉 ${m.username} guessed it!` : m.message;
+                    } else {
+                        try { sfx.play('pop'); } catch (e) { }
+                        div.className = "text-sm mb-2 break-words p-2 rounded-lg mx-2 flex flex-col bg-white border-2 border-gray-100";
+                        div.innerHTML = `<span class="font-bold text-black text-[10px] uppercase tracking-wide mb-0.5">${m.username}</span> <span class="text-gray-800">${m.message}</span>`;
+                    }
+                    return div;
+                };
+
+                // Add to both desktop and mobile chat boxes
+                const chatBoxDesktop = document.getElementById('chat-box');
+                const chatBoxMobile = document.getElementById('chat-box-mobile');
+                [chatBoxDesktop, chatBoxMobile].forEach(box => {
+                    if (box) box.prepend(createMsg());
+                });
+            });
+            updatePersist();
+        }
+    } catch (e) { }
+}
+
+async function sendChat(e) {
+    if (e) e.preventDefault();
+
+    // Restriction: Drawer cannot chat
+    if (gameState.myTurn && gameState.status === 'drawing') {
+        const input = document.getElementById('chat-input');
+        // Visual feedback
+        input.classList.add('ring-2', 'ring-red-500');
+        setTimeout(() => input.classList.remove('ring-2', 'ring-red-500'), 500);
+        return;
+    }
+
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+
+    await submitChat(msg);
+}
+
+async function sendChatMobile(e) {
+    if (e) e.preventDefault();
+    if (gameState.myTurn && gameState.status === 'drawing') return;
+
+    const input = document.getElementById('chat-input-mobile');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+
+    await submitChat(msg);
+}
+
+async function submitChat(msg) {
+    await fetch('api/chat.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: player.token, action: 'send', message: msg })
+    });
+    syncChat();
+}
+
+function setColor(c) {
+    try { sfx.play('pop'); } catch (e) { }
+    gameState.color = c;
+
+    // Update active state in UI
+    document.querySelectorAll('.color-dot').forEach(btn => {
+        btn.classList.remove('active');
+        // Simple check if color matches (converted to hex or rgb?)
+        // For simplicity we just assume click triggers this
+    });
+    // Visual feedback is handled by onclick logic mostly, but we can enhance later
+}
+function setSize(s) { gameState.size = s; }
+function clearCanvasAction() {
+    try { sfx.play('pop'); } catch (e) { }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    strokeHistory = [];
+    fetch('api/draw_sync.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: player.token, action: 'clear' })
+    });
+}
