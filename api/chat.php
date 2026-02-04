@@ -32,15 +32,20 @@ if ($action === 'send') {
         if (strcasecmp(trim($msg), $current_word) === 0) {
             // Correct!
             $is_correct = true;
-            $type = 'guess';
-            $msg = "guessed the word!";
-            
-            // Checking if already guessed?
-            // Need a "guesses" table or check messages?
             // Check if this player already guessed correctly in this round
             $chk = mysqli_query($conn, "SELECT id FROM messages WHERE round_id = {$round['id']} AND player_id = {$player['id']} AND type = 'guess'");
             if (mysqli_num_rows($chk) == 0) {
-                // Award points: Base 50 + Time Bonus (up to 100)
+                // Calculate Rank Bonus (How many already guessed?)
+                $rank_q = mysqli_query($conn, "SELECT COUNT(id) as cnt FROM messages WHERE round_id = {$round['id']} AND type = 'guess'");
+                $rank_row = mysqli_fetch_assoc($rank_q);
+                $rank = intval($rank_row['cnt']); // 0 = First guesser
+                
+                $rank_bonus = 0;
+                if ($rank === 0) $rank_bonus = 50;
+                elseif ($rank === 1) $rank_bonus = 30;
+                elseif ($rank === 2) $rank_bonus = 10;
+                
+                // Calculate Time Score (Linear Decay)
                 $time_elapsed = time() - strtotime($round['start_time']);
                 
                 // Fetch actual room duration
@@ -48,13 +53,11 @@ if ($action === 'send') {
                 $rd_row = mysqli_fetch_assoc($rd_q);
                 $total_duration = ($rd_row && $rd_row['round_duration']) ? intval($rd_row['round_duration']) : 60;
                 
-                // Formula: Max 150 -> Min 50 linearly decaying
-                // 1.5 multiplier was based on 60s. Let's make it proportional.
-                // If duration is 30s, 1s elapsed = great. 
-                // Points = 150 - (ElapsedTime * (100 / TotalDuration))
-                // Scale factor for Time Penalty
-                $scale = 100 / $total_duration; 
-                $points = max(30, intval(150 - ($time_elapsed * $scale)));
+                $time_left = max(0, $total_duration - $time_elapsed);
+                $time_score = ceil(($time_left / $total_duration) * 100);
+                
+                // Total Points
+                $points = max(10, $time_score + $rank_bonus);
                 
                 // Update Score
                 $new_score = $player['score'] + $points;

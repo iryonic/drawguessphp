@@ -67,12 +67,13 @@ if ($action === 'select_word') {
 }
 
 // Check for timeouts (State Machine)
-$round_q = mysqli_query($conn, "SELECT * FROM rounds WHERE room_id = $room_id ORDER BY id DESC LIMIT 1");
+$round_q = mysqli_query($conn, "SELECT *, TIMESTAMPDIFF(SECOND, NOW(), end_time) as sql_time_left FROM rounds WHERE room_id = $room_id ORDER BY id DESC LIMIT 1");
 $round = mysqli_fetch_assoc($round_q);
 
 if ($round) {
     if ($round['status'] === 'drawing') {
-        $timeLeft = strtotime($round['end_time']) - time();
+        // Use SQL calculated time left
+        $timeLeft = intval($round['sql_time_left']);
         if ($timeLeft <= 0) {
             // Calculate Drawer Score
             $guess_q = mysqli_query($conn, "SELECT COUNT(DISTINCT player_id) as cnt FROM messages WHERE round_id = {$round['id']} AND type = 'guess'");
@@ -80,51 +81,22 @@ if ($round) {
             $correct_guesses = $g_row['cnt'];
             
             if ($correct_guesses > 0) {
-                $drawer_points = $correct_guesses * 15;
+                // Improved Drawer Score: 10 + (5 * correct_guesses)
+                $drawer_points = 10 + ($correct_guesses * 5);
                  mysqli_query($conn, "UPDATE players SET score = score + $drawer_points WHERE id = {$round['drawer_id']}");
             }
 
             // Round End
             mysqli_query($conn, "UPDATE rounds SET status = 'ended' WHERE id = {$round['id']}");
-            // Schedule next round ? Handling automatically here is complex. 
-            // Better to let clients see 'ended' and Host triggers next, or auto-trigger here after delay.
-            // For simplicity: Auto-trigger next round if everyone has seen 'ended' (difficult).
-            // Alternative: Just wait for 'sync' to trigger next step.
-            
-            // Let's verify if max rounds reached
-            $room_q = mysqli_query($conn, "SELECT * FROM rooms WHERE id = $room_id");
-            $room = mysqli_fetch_assoc($room_q);
-            
-            if ($room['current_round'] < $room['max_rounds']) {
-                // Determine next round number. Actually rounds usually equal "Players count" * "Rounds". 
-                // But Prompt says "Round progression".
-                // We will just do infinite rounds or fixed number.
-                // Simple logic: If round ended, wait 5 seconds then start next.
-                // We need a 'cooldown' phase ideally.
-                // For now, if 'ended', we don't auto-start next immediately to let users see score.
-            } else {
-                 mysqli_query($conn, "UPDATE rooms SET status = 'finished' WHERE id = $room_id");
-            }
+            // ... (rest of logic)
+            // Re-fetch round to ensure 'ended' status for response
+             $round_q = mysqli_query($conn, "SELECT *, TIMESTAMPDIFF(SECOND, NOW(), end_time) as sql_time_left FROM rounds WHERE room_id = $room_id ORDER BY id DESC LIMIT 1");
+             $round = mysqli_fetch_assoc($round_q);
         }
     }
-    
-    // Auto-start next round logic (e.g. if status is ended for > 5 seconds)
-    // Checking "time since ended" is tricky without a column.
-    // We'll rely on the host client to triggers 'next_round' or just immediate.
 }
 
-// --- Gather State Response ---
-
-// Room Info
-$room_res = mysqli_query($conn, "SELECT * FROM rooms WHERE id = $room_id");
-$room = mysqli_fetch_assoc($room_res);
-
-// Players
-$players_res = mysqli_query($conn, "SELECT id, username, avatar, score, is_host FROM players WHERE room_id = $room_id");
-$players = [];
-while ($row = mysqli_fetch_assoc($players_res)) {
-    $players[] = $row;
-}
+// ...
 
 // Current Round
 $current_round = [];
@@ -135,8 +107,10 @@ if ($round) {
         'drawer_id' => $round['drawer_id'],
         'start_time' => $round['start_time'],
         'end_time' => $round['end_time'],
-        'time_left' => ($round['status'] == 'drawing') ? max(0, strtotime($round['end_time']) - time()) : 0
+        'time_left' => ($round['status'] == 'drawing') ? max(0, intval($round['sql_time_left'])) : 0
     ];
+    // ...
+}
     
     // Hide word if not drawer and drawing
     if ($player_id == $round['drawer_id'] || $round['status'] === 'ended') {
