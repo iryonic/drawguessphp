@@ -196,13 +196,13 @@
 
                  <!-- Game Overlay -->
                  <div id="overlay" class="absolute inset-0 z-20 hidden flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm transition-opacity p-4">
-                    <div class="neo-border bg-white p-6 md:p-8 rounded-2xl shadow-xl max-w-lg w-full text-center mx-4 overflow-y-auto max-h-full">
-                        <h2 id="overlay-title" class="text-3xl md:text-4xl font-black mb-2 text-ink">WAITING</h2>
-                        <h3 id="overlay-subtitle" class="text-lg md:text-xl font-bold text-gray-500 mb-6 hidden">Starting soon...</h3>
+                    <div class="neo-border bg-white p-4 md:p-8 rounded-2xl shadow-xl max-w-lg w-full text-center mx-1 md:mx-4 overflow-y-auto max-h-full flex flex-col items-center justify-center min-h-[50%]">
+                        <h2 id="overlay-title" class="text-2xl md:text-4xl font-black mb-1 md:mb-2 text-ink">WAITING</h2>
+                        <h3 id="overlay-subtitle" class="text-base md:text-xl font-bold text-gray-500 mb-3 md:mb-6 hidden">Starting soon...</h3>
                         <!-- Word Selection -->
-                        <div id="word-selection" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
+                        <div id="word-selection" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 w-full"></div>
                         <!-- Start Button -->
-                        <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-3 md:py-4 bg-pop-green text-lg md:text-xl font-bold rounded-xl hover:bg-green-300 mt-4 active:scale-95 transition-transform">
+                        <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-2 md:py-4 bg-pop-green text-base md:text-xl font-bold rounded-xl hover:bg-green-300 mt-2 md:mt-4 active:scale-95 transition-transform shrink-0">
                             START GAME 🎮
                         </button>
                     </div>
