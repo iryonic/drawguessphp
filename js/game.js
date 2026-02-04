@@ -9,7 +9,7 @@ const chatBox = document.getElementById('chat-box');
 const overlay = document.getElementById('overlay');
 const wordDisplay = document.getElementById('word-display');
 const timerEl = document.getElementById('timer');
-const timerProgress = document.getElementById('timer-progress'); // SVG Circle
+const timerProgress = document.getElementById('timer-progress');
 const turnNotif = document.getElementById('turn-notification');
 
 // Mobile Tabs
@@ -38,55 +38,24 @@ let gameState = {
     totalTime: 60
 };
 
-// ...
-
 // Update persist
 function updatePersist() {
     sessionStorage.setItem('dg_lastStrokeId', gameState.lastStrokeId);
     sessionStorage.setItem('dg_lastMsgId', gameState.lastMsgId);
 }
 
-// ... in syncState ...
-if (!res.data) return;
-const data = res.data;
-
-if (data.round.id != gameState.roundId) {
-    if (data.round.id > 0 && data.round.id > gameState.roundId) {
-        // New Round Logic - Clear persistence for strokes to fetch new round correctly?
-        // Actually if round ID changes, we should reset lastStrokeId naturally?
-        // But we might be mid-round on refresh.
-        if (gameState.roundId !== 0) { // Real change while running
-            try { sfx.play('start'); } catch (e) { }
-        }
-        gameState.lastStrokeId = 0; // Reset for new round
-    }
-}
-
-// ... in syncDraw ...
-res.data.strokes.forEach(s => {
-    if (s.id > gameState.lastStrokeId) gameState.lastStrokeId = s.id;
-    // ...
-});
-updatePersist();
-
-// ... in syncChat ...
-res.data.messages.forEach(m => {
-    if (m.id > gameState.lastMsgId) gameState.lastMsgId = m.id;
-    // ...
-});
-updatePersist();
-
 // Canvas State
 let painting = false;
 let pointsBuffer = [];
 let lastPos = { x: 0, y: 0 };
+let strokeHistory = [];
 
 // Local Timer
 let timerInterval = null;
 
 // Init
-roomCodeDisplay.innerText = player.room_code || '????';
-resizeCanvas(); // Initial resize
+if (roomCodeDisplay) roomCodeDisplay.innerText = player.room_code || '????';
+resizeCanvas();
 
 // Window Resize Handling
 window.addEventListener('resize', resizeCanvas);
@@ -94,51 +63,42 @@ window.addEventListener('resize', resizeCanvas);
 function resizeCanvas() {
     const container = document.getElementById('canvas-container');
     if (container) {
-        // Make pixel perfect
         const rect = container.getBoundingClientRect();
         canvas.width = rect.width;
         canvas.height = rect.height;
-        // Force redraw if needed (but strokes are cleared on resize usually in simple apps, 
-        // ideally we should repaint all strokes from history, but here we just accept it or wait for sync to fill it back?
-        // Sync fetches "new" strokes. We should ideally keep a local history or clear.
-        // For now, let's just keep it. Resolution change clears canvas content.
-        // We can trigger a "full sync" or just re-render if we stored history.
-        // Simplest: The next syncDraw loop doesn't repaint old ones. 
-        // So resizing wipes the screen for the user until next Round.
-        // Improvement: Store all strokes of current round in a 'strokeHistory' array and redraw on resize.
     }
 }
-// Store history for redraw
-let strokeHistory = [];
 
 // Listeners
-canvas.addEventListener('mousedown', startDraw);
-canvas.addEventListener('mousemove', draw);
-canvas.addEventListener('mouseup', endDraw);
-canvas.addEventListener('mouseleave', endDraw);
+if (canvas) {
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', endDraw);
+    canvas.addEventListener('mouseleave', endDraw);
 
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const mouseEvent = new MouseEvent("mousedown", { clientX: touch.clientX, clientY: touch.clientY });
-    canvas.dispatchEvent(mouseEvent);
-}, { passive: false });
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const mouseEvent = new MouseEvent("mousedown", { clientX: touch.clientX, clientY: touch.clientY });
+        canvas.dispatchEvent(mouseEvent);
+    }, { passive: false });
 
-canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const mouseEvent = new MouseEvent("mousemove", { clientX: touch.clientX, clientY: touch.clientY });
-    canvas.dispatchEvent(mouseEvent);
-}, { passive: false });
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const mouseEvent = new MouseEvent("mousemove", { clientX: touch.clientX, clientY: touch.clientY });
+        canvas.dispatchEvent(mouseEvent);
+    }, { passive: false });
 
-canvas.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    const mouseEvent = new MouseEvent("mouseup", {});
-    canvas.dispatchEvent(mouseEvent);
-});
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        const mouseEvent = new MouseEvent("mouseup", {});
+        canvas.dispatchEvent(mouseEvent);
+    });
+}
 
 // Polling
-syncState(); // Run immediately
+setTimeout(syncState, 100); // Run immediately
 setInterval(syncState, 2000);
 setInterval(syncDraw, 200);
 setInterval(syncChat, 1000);
@@ -151,18 +111,12 @@ timerInterval = setInterval(updateLocalTimer, 1000);
 
 // Mobile Tab Switching
 function switchTab(tab) {
-    // Buttons
     Object.values(tabBtns).forEach(btn => {
         if (btn) {
             btn.classList.remove('text-indigo-400', 'bg-slate-800');
             btn.classList.add('text-gray-400', 'hover:bg-gray-800');
-            // Remove active border/styles for mobile nav
-            if (btn.parentElement.tagName === 'NAV') {
-                // Reset styles for mobile nav items (handled by simple classes usually)
-            }
         }
     });
-    // Specific styling for mobile nav logic if needed, but relies on onClick mainly
 
     // Views
     if (window.innerWidth < 768) {
@@ -173,7 +127,7 @@ function switchTab(tab) {
 
 function updateLocalTimer() {
     if (gameState.status !== 'drawing') {
-        timerEl.innerText = "--";
+        if (timerEl) timerEl.innerText = "--";
         if (timerProgress) timerProgress.style.strokeDashoffset = 0;
         return;
     }
@@ -182,18 +136,15 @@ function updateLocalTimer() {
     let left = gameState.endTime > 0 ? gameState.endTime - now : 0;
     if (left < 0) left = 0;
 
-    timerEl.innerText = left;
+    if (timerEl) timerEl.innerText = left;
 
     if (timerProgress) {
-        // Calculate progress based on total time (default 60 if missing)
         const total = gameState.totalTime || 60;
         const pct = (left / total);
-        // stroke-dasharray="100, 100" means 100 is full circumference
         const offset = 100 - (pct * 100);
         timerProgress.style.strokeDashoffset = offset;
 
         if (left <= 10 && left > 0) {
-            // Pulse effect
             timerEl.classList.add('text-red-500');
             try { sfx.play('tick'); } catch (e) { }
         } else {
@@ -206,7 +157,6 @@ function getNormalizedPos(evt) {
     const rect = canvas.getBoundingClientRect();
     const x = (evt.clientX - rect.left);
     const y = (evt.clientY - rect.top);
-    // Normalize 0.0 to 1.0
     return {
         x: parseFloat((x / canvas.width).toFixed(4)),
         y: parseFloat((y / canvas.height).toFixed(4))
@@ -218,8 +168,6 @@ function startDraw(e) {
     painting = true;
     lastPos = getNormalizedPos(e);
     pointsBuffer = [lastPos];
-
-    // Draw immediately
     drawDot(lastPos.x, lastPos.y, gameState.color, gameState.size);
 }
 
@@ -230,8 +178,6 @@ function drawDot(nx, ny, color, size) {
     ctx.arc(x, y, size / 2, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-
-    // Add to history
     strokeHistory.push({ type: 'dot', x: nx, y: ny, color, size });
 }
 
@@ -257,9 +203,7 @@ function drawLine(nx1, ny1, nx2, ny2, color, size) {
 function draw(e) {
     if (!painting || !gameState.myTurn) return;
     const pos = getNormalizedPos(e);
-
     drawLine(lastPos.x, lastPos.y, pos.x, pos.y, gameState.color, gameState.size);
-
     lastPos = pos;
     pointsBuffer.push(pos);
 }
@@ -280,7 +224,6 @@ async function sendStrokes() {
         size: gameState.size,
         points: JSON.stringify(pointsBuffer)
     };
-
     pointsBuffer = [];
 
     await fetch('api/draw_sync.php', {
@@ -293,27 +236,33 @@ async function sendStrokes() {
 
 async function syncState() {
     try {
-        const res = await (await fetch('api/game_state.php', {
+        const response = await fetch('api/game_state.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ token: player.token, action: 'sync' })
-        })).json();
+        });
+        const res = await response.json();
+
+        // Handle Session Error
+        if (res.error === 'Invalid Session') {
+            alert('Session expired. Redirecting to home.');
+            window.location.href = 'index.php';
+            return;
+        }
 
         if (res.data && res.data.room) {
-            // Force update Room Code from server (fixes "????" issue)
-            if (roomCodeDisplay) roomCodeDisplay.innerText = res.data.room.room_code || '????';
+            if (roomCodeDisplay) roomCodeDisplay.textContent = res.data.room.room_code || '????';
         }
 
         if (!res.data) {
-            if (res.error) console.error("Sync Error:", res.error);
+            console.warn("Sync: No data received", res);
             return;
         }
         const data = res.data;
 
-        // Round Change Detection
+        // Round Change / Data Sync
         if (data.round.id != gameState.roundId) {
             if (data.round.id > 0 && data.round.id > gameState.roundId) {
-                // Only reset strokes if it's a NEW round
                 gameState.lastStrokeId = 0;
                 strokeHistory = [];
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -322,17 +271,16 @@ async function syncState() {
                     try { sfx.play('start'); } catch (e) { }
                 }
             }
-            if (data.round.id === 0) {
-                // Lobby probably, or reset
-            }
         }
 
         gameState.roundId = data.round.id;
         gameState.status = data.round.status || 'lobby';
 
-        document.getElementById('game-status-text').innerText = gameState.status;
-        document.getElementById('current-round').innerText = data.room.current_round;
-        document.getElementById('max-rounds').innerText = data.room.max_rounds;
+        if (document.getElementById('game-status-text'))
+            document.getElementById('game-status-text').textContent = gameState.status === 'lobby' ? 'LOBBY' : gameState.status.toUpperCase();
+
+        if (document.getElementById('current-round')) document.getElementById('current-round').textContent = data.room.current_round;
+        if (document.getElementById('max-rounds')) document.getElementById('max-rounds').textContent = data.room.max_rounds;
 
         if (data.round.time_left !== undefined) {
             const now = Math.floor(Date.now() / 1000);
@@ -360,18 +308,20 @@ async function syncState() {
         }
 
         // Overlays
-        const overlay = document.getElementById('overlay');
         const overlayTitle = document.getElementById('overlay-title');
         const overlaySubtitle = document.getElementById('overlay-subtitle');
         const wordSelect = document.getElementById('word-selection');
         const startBtn = document.getElementById('start-btn');
 
         if (gameState.status === 'lobby') {
-            overlay.classList.remove('hidden');
-            overlayTitle.innerText = "WAITING FOR PLAYERS";
-            overlaySubtitle.innerText = "Share the room code!";
-            overlaySubtitle.classList.remove('hidden');
-            wordSelect.classList.add('hidden');
+            if (overlay) overlay.classList.remove('hidden');
+            if (overlayTitle) overlayTitle.textContent = "WAITING FOR PLAYERS";
+            if (overlaySubtitle) {
+                overlaySubtitle.textContent = "Share the room code: " + (data.room.room_code || '????');
+                overlaySubtitle.classList.remove('hidden');
+            }
+            if (wordSelect) wordSelect.classList.add('hidden');
+
             const mePlayer = data.players.find(p => p.id == data.me);
             if (mePlayer && mePlayer.is_host == 1) {
                 if (startBtn) startBtn.classList.remove('hidden');
@@ -379,70 +329,79 @@ async function syncState() {
                 if (startBtn) startBtn.classList.add('hidden');
             }
         } else if (gameState.status === 'choosing') {
-            overlay.classList.remove('hidden');
+            if (overlay) overlay.classList.remove('hidden');
             if (startBtn) startBtn.classList.add('hidden');
             if (isMe) {
-                overlayTitle.innerText = "IT'S YOUR TURN!";
-                overlaySubtitle.innerText = "Choose a Word to Draw";
-                overlaySubtitle.classList.remove('hidden');
-                wordSelect.innerHTML = '';
-                wordSelect.classList.remove('hidden');
-                if (data.words && wordSelect.children.length === 0) {
-                    data.words.forEach(w => {
-                        const btn = document.createElement('button');
-                        btn.className = "bg-pop-blue hover:bg-sky-300 border-2 border-ink px-6 py-4 rounded-xl text-black font-bold text-lg hover:scale-105 transition shadow-[4px_4px_0px_#000]";
-                        btn.innerText = `${w.word}`;
-                        const badge = w.difficulty == 'easy' ? '🟢' : (w.difficulty == 'medium' ? '🟡' : '🔴');
-                        btn.innerHTML += ` <span class="text-xs ml-2">${badge}</span>`;
-                        btn.onclick = () => selectWord(w.id);
-                        wordSelect.appendChild(btn);
-                    });
+                if (overlayTitle) overlayTitle.textContent = "IT'S YOUR TURN!";
+                if (overlaySubtitle) {
+                    overlaySubtitle.textContent = "Choose a Word to Draw";
+                    overlaySubtitle.classList.remove('hidden');
+                }
+                if (wordSelect) {
+                    wordSelect.innerHTML = '';
+                    wordSelect.classList.remove('hidden');
+                    if (data.words && wordSelect.children.length === 0) {
+                        data.words.forEach(w => {
+                            const btn = document.createElement('button');
+                            btn.className = "bg-pop-blue hover:bg-sky-300 border-2 border-ink px-6 py-4 rounded-xl text-black font-bold text-lg hover:scale-105 transition shadow-[4px_4px_0px_#000]";
+                            btn.textContent = `${w.word}`;
+                            const badge = w.difficulty == 'easy' ? '🟢' : (w.difficulty == 'medium' ? '🟡' : '🔴');
+                            btn.innerHTML += ` <span class="text-xs ml-2">${badge}</span>`;
+                            btn.onclick = () => selectWord(w.id);
+                            wordSelect.appendChild(btn);
+                        });
+                    }
                 }
             } else {
-                overlayTitle.innerText = "DRAWER IS CHOOSING";
-                overlaySubtitle.innerText = "Get ready to guess!";
-                overlaySubtitle.classList.remove('hidden');
-                wordSelect.classList.add('hidden');
+                if (overlayTitle) overlayTitle.textContent = "DRAWER IS CHOOSING";
+                if (overlaySubtitle) {
+                    overlaySubtitle.textContent = "Get ready to guess!";
+                    overlaySubtitle.classList.remove('hidden');
+                }
+                if (wordSelect) wordSelect.classList.add('hidden');
             }
         } else if (gameState.status === 'drawing') {
-            overlay.classList.add('hidden');
+            if (overlay) overlay.classList.add('hidden');
             if (data.round.word) {
-                wordDisplay.innerText = data.round.word.split('').join(' ');
+                if (wordDisplay) wordDisplay.textContent = data.round.word.split('').join(' ');
             } else {
-                wordDisplay.innerText = "UNKNOWN";
+                if (wordDisplay) wordDisplay.textContent = "UNKNOWN";
             }
 
             if (data.round.id != gameState.roundId) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                strokeHistory = []; // Clear local history
+                strokeHistory = [];
                 gameState.roundId = data.round.id;
                 gameState.lastStrokeId = 0;
             }
         } else if (gameState.status === 'ended') {
-            overlay.classList.remove('hidden');
-            overlayTitle.innerText = `ROUND OVER!`;
-            overlaySubtitle.innerText = `The word was: ${data.round.word}`;
-
-            // if (prevStatus !== 'ended') sfx.play('win');
-
-            overlaySubtitle.classList.remove('hidden');
-            wordSelect.classList.add('hidden');
-            startBtn.classList.add('hidden');
+            if (overlay) overlay.classList.remove('hidden');
+            if (overlayTitle) overlayTitle.textContent = `ROUND OVER!`;
+            if (overlaySubtitle) {
+                overlaySubtitle.textContent = `The word was: ${data.round.word}`;
+                overlaySubtitle.classList.remove('hidden');
+            }
+            if (wordSelect) wordSelect.classList.add('hidden');
+            if (startBtn) startBtn.classList.add('hidden');
 
             const meP = data.players.find(p => p.id == data.me);
             if (meP && meP.is_host == 1) {
-                startBtn.innerText = "Start Next Round";
-                startBtn.classList.remove('hidden');
+                if (startBtn) {
+                    startBtn.innerText = "Start Next Round";
+                    startBtn.classList.remove('hidden');
+                }
             }
         }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("SyncState Error:", e); }
 }
 
 function showTurnNotification() {
-    turnNotif.classList.remove('opacity-0');
-    setTimeout(() => {
-        turnNotif.classList.add('opacity-0');
-    }, 3000);
+    if (turnNotif) {
+        turnNotif.classList.remove('opacity-0');
+        setTimeout(() => {
+            turnNotif.classList.add('opacity-0');
+        }, 3000);
+    }
 }
 
 function updatePlayers(players, drawerId) {
