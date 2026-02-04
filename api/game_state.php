@@ -96,7 +96,20 @@ if ($round) {
     }
 }
 
-// ...
+// --- Gather State Response ---
+
+// Room Info
+$room_res = mysqli_query($conn, "SELECT * FROM rooms WHERE id = $room_id");
+$room = mysqli_fetch_assoc($room_res);
+
+// Players
+$players_res = mysqli_query($conn, "SELECT id, username, avatar, score, is_host FROM players WHERE room_id = $room_id");
+$players = [];
+while ($row = mysqli_fetch_assoc($players_res)) {
+    $row['is_me'] = ($row['id'] == $player_id);
+    $row['is_host'] = ((int)$row['is_host'] === 1); 
+    $players[] = $row;
+}
 
 // Current Round
 $current_round = [];
@@ -109,8 +122,7 @@ if ($round) {
         'end_time' => $round['end_time'],
         'time_left' => ($round['status'] == 'drawing') ? max(0, intval($round['sql_time_left'])) : 0
     ];
-    // ...
-}
+
     
     // Hide word if not drawer and drawing
     if ($player_id == $round['drawer_id'] || $round['status'] === 'ended') {

@@ -202,7 +202,7 @@
                         <!-- Word Selection -->
                         <div id="word-selection" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 w-full"></div>
                         <!-- Start Button -->
-                        <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-2 md:py-4 bg-pop-green text-base md:text-xl font-bold rounded-xl hover:bg-green-300 mt-2 md:mt-4 active:scale-95 transition-transform shrink-0">
+                        <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-2 md:py-4 pl-28 bg-pop-green text-base md:text-xl font-bold rounded-xl hover:bg-green-300 mt-2 md:mt-4 active:scale-95 transition-transform shrink-0">
                             START GAME 🎮
                         </button>
                     </div>

@@ -378,11 +378,18 @@ async function syncState() {
             }
             if (wordSelect) wordSelect.classList.add('hidden');
 
-            const mePlayer = data.players.find(p => p.id == data.me);
-            if (mePlayer && mePlayer.is_host == 1) {
-                if (startBtn) startBtn.classList.remove('hidden');
-            } else {
-                if (startBtn) startBtn.classList.add('hidden');
+            // Use improved flags
+            const mePlayer = data.players.find(p => p.is_me);
+            const isHost = mePlayer ? mePlayer.is_host : false;
+
+            if (startBtn) {
+                if (isHost) {
+                    startBtn.classList.remove('hidden');
+                    startBtn.classList.add('flex'); // Ensure flex display
+                } else {
+                    startBtn.classList.add('hidden');
+                    startBtn.classList.remove('flex');
+                }
             }
         } else if (gameState.status === 'choosing') {
             if (overlay) overlay.classList.remove('hidden');
