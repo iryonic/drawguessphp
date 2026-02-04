@@ -7,6 +7,10 @@ const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const chatBox = document.getElementById('chat-box');
 const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlay-title'); // Added
+const overlaySubtitle = document.getElementById('overlay-subtitle'); // Added
+const wordSelect = document.getElementById('word-selection'); // Added
+const startBtn = document.getElementById('start-btn'); // Added
 const wordDisplay = document.getElementById('word-display');
 const timerEl = document.getElementById('timer');
 const timerProgress = document.getElementById('timer-progress');
@@ -28,8 +32,8 @@ const views = {
 let gameState = {
     status: 'lobby',
     roundId: 0,
-    lastStrokeId: parseInt(sessionStorage.getItem('dg_lastStrokeId') || '0'),
-    lastMsgId: parseInt(sessionStorage.getItem('dg_lastMsgId') || '0'),
+    lastStrokeId: 0, // Reset on load to fetch full drawing
+    lastMsgId: 0,    // Reset on load to fetch full chat
     isDrawer: false,
     color: '#000000',
     size: 5,
@@ -38,10 +42,10 @@ let gameState = {
     totalTime: 60
 };
 
-// Update persist
+// Update persist (noop now, kept for compatibility if called elsewhere)
 function updatePersist() {
-    sessionStorage.setItem('dg_lastStrokeId', gameState.lastStrokeId);
-    sessionStorage.setItem('dg_lastMsgId', gameState.lastMsgId);
+    // sessionStorage.setItem('dg_lastStrokeId', gameState.lastStrokeId);
+    // sessionStorage.setItem('dg_lastMsgId', gameState.lastMsgId);
 }
 
 // Canvas State
@@ -56,6 +60,11 @@ let timerInterval = null;
 // Init
 if (roomCodeDisplay) roomCodeDisplay.innerText = player.room_code || '????';
 resizeCanvas();
+
+// Default to Chat on Mobile
+if (window.innerWidth < 1024) {
+    switchTab('chat');
+}
 
 // Window Resize Handling
 window.addEventListener('resize', resizeCanvas);
@@ -111,45 +120,92 @@ timerInterval = setInterval(updateLocalTimer, 1000);
 
 // Mobile Tab Switching
 function switchTab(tab) {
+    const drawView = document.getElementById('view-draw');
+    const mobilePanel = document.getElementById('mobile-panel');
+    const mobileChat = document.getElementById('view-chat-mobile');
+    const mobileRank = document.getElementById('view-rank');
+
+    // Reset Buttons
     Object.values(tabBtns).forEach(btn => {
         if (btn) {
-            btn.classList.remove('text-indigo-400', 'bg-slate-800');
-            btn.classList.add('text-gray-400', 'hover:bg-gray-800');
+            btn.classList.add('text-gray-400');
+            btn.classList.remove('text-ink', 'bg-gray-100');
+            const icon = btn.querySelector('span');
+            if (icon) {
+                icon.classList.add('grayscale', 'opacity-50');
+                icon.classList.remove('opacity-100');
+            }
         }
     });
 
-    // Views
-    if (window.innerWidth < 768) {
-        Object.values(views).forEach(v => v ? v.classList.add('hidden') : null);
-        if (views[tab]) views[tab].classList.remove('hidden');
+    // Active Button
+    if (tabBtns[tab]) {
+        tabBtns[tab].classList.remove('text-gray-400');
+        tabBtns[tab].classList.add('text-ink', 'bg-gray-100');
+        const icon = tabBtns[tab].querySelector('span');
+        if (icon) {
+            icon.classList.remove('grayscale', 'opacity-50');
+            icon.classList.add('opacity-100');
+        }
+    }
+
+    // Logic for Views (Split Screen)
+    if (window.innerWidth < 1024) {
+        if (tab === 'draw') {
+            // Full Screen Canvas mode
+            drawView.classList.remove('h-[50vh]');
+            drawView.classList.add('h-full', 'flex-1');
+
+            mobilePanel.style.height = '0';
+        } else {
+            // Split Screen mode
+            drawView.classList.remove('h-full', 'flex-1');
+            drawView.classList.add('h-[50vh]'); // Shrink Canvas to 50%
+
+            mobilePanel.classList.remove('h-0');
+            mobilePanel.classList.add('flex-1');
+
+            // Toggle Content
+            mobileChat.classList.add('hidden');
+            mobileRank.classList.add('hidden');
+
+            if (tab === 'chat') mobileChat.classList.remove('hidden');
+            if (tab === 'rank') mobileRank.classList.remove('hidden');
+        }
+        resizeCanvas();
     }
 }
 
 function updateLocalTimer() {
+    // If not drawing, clear timer visual
     if (gameState.status !== 'drawing') {
         if (timerEl) timerEl.innerText = "--";
         if (timerProgress) timerProgress.style.strokeDashoffset = 0;
         return;
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    let left = gameState.endTime > 0 ? gameState.endTime - now : 0;
-    if (left < 0) left = 0;
+    const now = Date.now() / 1000;
+    // Use Math.ceil so 59.9s shows as 60, and 0.1s shows as 1. 0 is 0.
+    let left = gameState.endTime > 0 ? Math.max(0, Math.ceil(gameState.endTime - now)) : 0;
 
-    if (timerEl) timerEl.innerText = left;
+    if (timerEl) {
+        timerEl.innerText = left;
+        // Pulse red when low time
+        if (left <= 10 && left > 0) {
+            timerEl.classList.add('text-red-600', 'animate-pulse');
+        } else {
+            timerEl.classList.remove('text-red-600', 'animate-pulse');
+        }
+    }
 
     if (timerProgress) {
         const total = gameState.totalTime || 60;
-        const pct = (left / total);
+        // If time is up, offset is 100 (empty). If full, 0.
+        // pct = percentage remaining. 1.0 = full. 0.0 = empty.
+        const pct = Math.min(1, Math.max(0, left / total));
+        // StrokeDashArray is 100. Offset 0 = Full. Offset 100 = Empty.
         const offset = 100 - (pct * 100);
         timerProgress.style.strokeDashoffset = offset;
-
-        if (left <= 10 && left > 0) {
-            timerEl.classList.add('text-red-500');
-            try { sfx.play('tick'); } catch (e) { }
-        } else {
-            timerEl.classList.remove('text-red-500');
-        }
     }
 }
 

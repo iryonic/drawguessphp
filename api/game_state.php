@@ -56,10 +56,10 @@ if ($action === 'select_word') {
     $round = mysqli_fetch_assoc($round_q);
     
     if ($round['drawer_id'] == $player_id && $round['status'] == 'choosing') { 
-        // Fetch room duration
+        // Fetch room duration - explicit check
         $room_settings_q = mysqli_query($conn, "SELECT round_duration FROM rooms WHERE id = $room_id");
         $room_settings = mysqli_fetch_assoc($room_settings_q);
-        $duration = $room_settings['round_duration'] ? intval($room_settings['round_duration']) : 60;
+        $duration = (isset($room_settings['round_duration']) && $room_settings['round_duration'] > 0) ? intval($room_settings['round_duration']) : 60;
         
         mysqli_query($conn, "UPDATE rounds SET word_id = $word_id, status = 'drawing', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL $duration SECOND) WHERE id = {$round['id']}");
         jsonResponse(['success' => true]);
@@ -160,9 +160,26 @@ if ($round) {
 // Words to choose (if choosing and drawer)
 $words_to_choose = [];
 if ($round && $round['status'] === 'choosing' && $round['drawer_id'] == $player_id) {
-     $wq = mysqli_query($conn, "SELECT * FROM words ORDER BY RAND() LIMIT 3");
-     while($w = mysqli_fetch_assoc($wq)) {
-         $words_to_choose[] = $w;
+     // Check if we already have options for this round
+     if (!empty($round['word_options'])) {
+         $ids = $round['word_options'];
+         $wq = mysqli_query($conn, "SELECT * FROM words WHERE id IN ($ids)");
+         while($w = mysqli_fetch_assoc($wq)) {
+             $words_to_choose[] = $w;
+         }
+     } else {
+         // Generate new options
+         $wq = mysqli_query($conn, "SELECT * FROM words ORDER BY RAND() LIMIT 3");
+         $ids_arr = [];
+         while($w = mysqli_fetch_assoc($wq)) {
+             $words_to_choose[] = $w;
+             $ids_arr[] = $w['id'];
+         }
+         
+         if (!empty($ids_arr)) {
+             $ids_str = implode(',', $ids_arr);
+             mysqli_query($conn, "UPDATE rounds SET word_options = '$ids_str' WHERE id = {$round['id']}");
+         }
      }
 }
 

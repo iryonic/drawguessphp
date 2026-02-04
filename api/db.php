@@ -5,10 +5,27 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0); // Turn off HTML error reporting
 
 // Database configuration
-$host = 'localhost';
-$user = 'root';
-$pass = '';
-$db_name = 'drawguess';
+$is_local = true;
+if (isset($_SERVER['HTTP_HOST'])) {
+    if ($_SERVER['HTTP_HOST'] !== 'localhost' && $_SERVER['HTTP_HOST'] !== '127.0.0.1') {
+        $is_local = false;
+    }
+}
+
+if ($is_local) {
+    // Local
+    $host = 'localhost';
+    $user = 'root';
+    $pass = '';
+    $db_name = 'drawguess';
+} else {
+    // Production
+    $host = 'localhost';
+    $user = 'u167160735_drawguess';
+    $pass = 'DrawGuess@1234#';
+    $db_name = 'u167160735_drawguess';
+}
+
 
 // Connect to MySQL
 $conn = mysqli_connect($host, $user, $pass);

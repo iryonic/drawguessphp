@@ -40,20 +40,28 @@ if ($action === 'send') {
             // Check if this player already guessed correctly in this round
             $chk = mysqli_query($conn, "SELECT id FROM messages WHERE round_id = {$round['id']} AND player_id = {$player['id']} AND type = 'guess'");
             if (mysqli_num_rows($chk) == 0) {
-                 // Award points
-                $points = 100; // Base points
-                
-                // Bonus based on time?
+                // Award points: Base 50 + Time Bonus (up to 100)
                 $time_elapsed = time() - strtotime($round['start_time']);
-                $points += max(0, 50 - $time_elapsed); // simple calc
+                
+                // Fetch actual room duration
+                $rd_q = mysqli_query($conn, "SELECT round_duration FROM rooms WHERE id = $room_id");
+                $rd_row = mysqli_fetch_assoc($rd_q);
+                $total_duration = ($rd_row && $rd_row['round_duration']) ? intval($rd_row['round_duration']) : 60;
+                
+                // Formula: Max 150 -> Min 50 linearly decaying
+                // 1.5 multiplier was based on 60s. Let's make it proportional.
+                // If duration is 30s, 1s elapsed = great. 
+                // Points = 150 - (ElapsedTime * (100 / TotalDuration))
+                // Scale factor for Time Penalty
+                $scale = 100 / $total_duration; 
+                $points = max(30, intval(150 - ($time_elapsed * $scale)));
                 
                 // Update Score
                 $new_score = $player['score'] + $points;
                 mysqli_query($conn, "UPDATE players SET score = $new_score WHERE id = {$player['id']}");
                 
-                // Also give points to drawer?
-                // Increment drawer score by 10 per guess
-                mysqli_query($conn, "UPDATE players SET score = score + 10 WHERE id = {$round['drawer_id']}");
+                // Drawer Bonus: 20 per correct guess
+                mysqli_query($conn, "UPDATE players SET score = score + 20 WHERE id = {$round['drawer_id']}");
             } else {
                  // Already guessed, prevent spamming "guessed!"
                  jsonResponse(['success' => true]); // Silent success
