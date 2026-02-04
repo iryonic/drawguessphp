@@ -236,9 +236,14 @@
             <div class="space-y-6">
                 <div>
                      <label class="block text-xs font-bold text-gray-500 uppercase mb-2 text-center">Total Rounds</label>
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="setRounds(2)" class="modal-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="2">2</button>
                         <button onclick="setRounds(3)" class="modal-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none selected text-sm" data-val="3">3</button>
+                        <button onclick="setRounds(4)" class="modal-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="4">4</button>
                         <button onclick="setRounds(5)" class="modal-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="5">5</button>
+                        <button onclick="setRounds(6)" class="modal-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="6">6</button>
+                        <button onclick="setRounds(7)" class="modal-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="7">7</button>
+                        <button onclick="setRounds(8)" class="modal-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="8">8</button>
                         <button onclick="setRounds(10)" class="modal-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="10">10</button>
                     </div>
                     <input type="hidden" id="crs-rounds" value="3">
@@ -246,10 +251,15 @@
 
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-2 text-center">Seconds per Turn</label>
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="grid grid-cols-4 gap-2">
+                        <button onclick="setTime(30)" class="modal-time-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="30">30s</button>
                         <button onclick="setTime(45)" class="modal-time-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="45">45s</button>
                         <button onclick="setTime(60)" class="modal-time-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none selected text-sm" data-val="60">60s</button>
+                        <button onclick="setTime(75)" class="modal-time-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="75">75s</button>
                         <button onclick="setTime(90)" class="modal-time-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="90">90s</button>
+                        <button onclick="setTime(100)" class="modal-time-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="100">100s</button>
+                        <button onclick="setTime(120)" class="modal-time-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="120">120s</button>
+                        <button onclick="setTime(180)" class="modal-time-opt btn-pop py-2 rounded-xl bg-white text-gray-500 font-bold border-2 border-gray-200 shadow-none hover:shadow-none text-sm" data-val="180">180s</button>
                     </div>
                     <input type="hidden" id="crs-time" value="60">
                 </div>

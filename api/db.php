@@ -128,9 +128,23 @@ if (mysqli_num_rows($tbl_check) == 0) {
 
 // Common helper functions
 function jsonResponse($data, $success = true) {
-    ob_clean(); // Clear any previous output (warnings, etc)
+    ob_clean();
     header('Content-Type: application/json');
-    echo json_encode(['success' => $success, 'data' => $data]);
+    
+    $response = ['success' => $success];
+    
+    if ($success) {
+        $response['data'] = $data;
+    } else {
+        // If error, flatten it to top level if passed as ['error' => 'msg']
+        if (is_array($data) && isset($data['error'])) {
+            $response['error'] = $data['error'];
+        } else {
+            $response['error'] = is_string($data) ? $data : 'Unknown error';
+        }
+    }
+    
+    echo json_encode($response);
     exit;
 }
 
@@ -147,4 +161,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
-?>
+

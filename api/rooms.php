@@ -86,7 +86,7 @@ if ($action === 'create') {
             'token' => $token
         ]);
     } else {
-        jsonResponse(['error' => 'Failed to join room'], false);
+        jsonResponse(['error' => 'Failed to join room: ' . mysqli_error($conn)], false);
     }
 } else {
     jsonResponse(['error' => 'Invalid action'], false);

@@ -403,8 +403,10 @@ async function syncState() {
                 if (wordSelect) {
                     wordSelect.innerHTML = '';
                     wordSelect.classList.remove('hidden');
-                    if (data.words && wordSelect.children.length === 0) {
-                        data.words.forEach(w => {
+                    // Check round.options instead of data.words
+                    const options = data.round.options || data.words || [];
+                    if (options.length > 0 && wordSelect.children.length === 0) {
+                        options.forEach(w => {
                             const btn = document.createElement('button');
                             btn.className = "bg-pop-blue hover:bg-sky-300 border-2 border-ink px-6 py-4 rounded-xl text-black font-bold text-lg hover:scale-105 transition shadow-[4px_4px_0px_#000]";
                             btn.textContent = `${w.word}`;
@@ -423,12 +425,25 @@ async function syncState() {
                 }
                 if (wordSelect) wordSelect.classList.add('hidden');
             }
+        } else if (gameState.status === 'countdown') {
+            if (overlay) overlay.classList.remove('hidden');
+            if (overlayTitle) overlayTitle.textContent = "GET READY!";
+            if (overlaySubtitle) {
+                const left = data.round.time_left || 0;
+                overlaySubtitle.innerHTML = `<div class="text-6xl font-black text-ink my-4 animate-bounce">${left}</div><div class="text-sm font-bold text-gray-500 uppercase">Guess the drawing to win points!</div>`;
+                overlaySubtitle.classList.remove('hidden');
+            }
+            if (wordSelect) wordSelect.classList.add('hidden');
+            if (startBtn) startBtn.classList.add('hidden');
+            if (wordDisplay) wordDisplay.textContent = ''; // Clear word display during countdown
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear
+
         } else if (gameState.status === 'drawing') {
             if (overlay) overlay.classList.add('hidden');
             if (data.round.word) {
                 if (wordDisplay) wordDisplay.textContent = data.round.word.split('').join(' ');
             } else {
-                if (wordDisplay) wordDisplay.textContent = "UNKNOWN";
+                if (wordDisplay) wordDisplay.textContent = "";
             }
 
             if (data.round.id != gameState.roundId) {
@@ -440,20 +455,14 @@ async function syncState() {
         } else if (gameState.status === 'ended') {
             if (overlay) overlay.classList.remove('hidden');
             if (overlayTitle) overlayTitle.textContent = `ROUND OVER!`;
+
+            const nextIn = data.round.time_left || 0;
             if (overlaySubtitle) {
-                overlaySubtitle.textContent = `The word was: ${data.round.word}`;
+                overlaySubtitle.innerHTML = `The word was: <span class="font-black text-2xl mx-2 text-ink uppercase">${data.round.word}</span><br><div class="text-xs font-bold text-gray-400 mt-4 uppercase tracking-widest">Next turn in ${nextIn}s</div>`;
                 overlaySubtitle.classList.remove('hidden');
             }
             if (wordSelect) wordSelect.classList.add('hidden');
             if (startBtn) startBtn.classList.add('hidden');
-
-            const meP = data.players.find(p => p.id == data.me);
-            if (meP && meP.is_host == 1) {
-                if (startBtn) {
-                    startBtn.innerText = "Start Next Round";
-                    startBtn.classList.remove('hidden');
-                }
-            }
         }
     } catch (e) { console.error("SyncState Error:", e); }
 }
@@ -516,31 +525,74 @@ async function startGame() {
     });
 }
 
+// Queue for incoming strokes (smoother rendering)
+let strokeQueue = [];
+
+// Start render loop
+requestAnimationFrame(renderLoop);
+
+function renderLoop() {
+    if (strokeQueue.length > 0) {
+        // Process queue
+        while (strokeQueue.length > 0) {
+            const s = strokeQueue.shift();
+
+            if (s.color === 'CLEAR') {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                strokeHistory = [];
+                continue;
+            }
+
+            const points = s.points;
+            if (!points || points.length < 1) continue;
+
+            // Draw stroke
+            if (points.length === 1) {
+                // Dot
+                const p = points[0];
+                ctx.beginPath();
+                ctx.fillStyle = s.color;
+                ctx.arc(p.x * canvas.width, p.y * canvas.height, s.size / 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                // Line
+                ctx.beginPath();
+                ctx.lineWidth = s.size;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = s.color;
+
+                const start = points[0];
+                ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+                for (let i = 1; i < points.length; i++) {
+                    const p = points[i];
+                    ctx.lineTo(p.x * canvas.width, p.y * canvas.height);
+                }
+                ctx.stroke();
+            }
+        }
+    }
+    requestAnimationFrame(renderLoop);
+}
+
 async function syncDraw() {
+    // If I'm drawing, I handle my own render instantly.
+    // We skip fetching unless we want to validate sync (not needed for MVP)
     if (gameState.myTurn && gameState.status === 'drawing') return;
+    if (gameState.status !== 'drawing' && gameState.status !== 'ended') return;
+    // ^ Allow sync in 'ended' briefly to catch tail strokes? actually status 'ended' might clear.
     if (gameState.status !== 'drawing') return;
 
     try {
         const res = await (await fetch(`api/draw_sync.php?token=${player.token}&action=fetch&last_id=${gameState.lastStrokeId}`)).json();
         if (res.data && res.data.strokes) {
+            // Sort just in case DB doesn't ensure order (id usually does)
+            res.data.strokes.sort((a, b) => a.id - b.id);
+
             res.data.strokes.forEach(s => {
                 if (s.id > gameState.lastStrokeId) gameState.lastStrokeId = s.id;
-
-                if (s.color === 'CLEAR') {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    strokeHistory = [];
-                    return;
-                }
-                const points = s.points;
-                if (points.length < 1) return;
-
-                const start = points[0];
-                drawLine(start.x, start.y, start.x, start.y + 0.0001, s.color, s.size);
-                for (let i = 1; i < points.length; i++) {
-                    const p1 = points[i - 1];
-                    const p2 = points[i];
-                    drawLine(p1.x, p1.y, p2.x, p2.y, s.color, s.size);
-                }
+                // Add to queue for render loop
+                strokeQueue.push(s);
             });
             updatePersist();
         }
