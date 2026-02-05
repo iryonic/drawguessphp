@@ -370,6 +370,13 @@ async function syncState() {
         if (document.getElementById('current-round')) document.getElementById('current-round').textContent = data.room.current_round;
         if (document.getElementById('max-rounds')) document.getElementById('max-rounds').textContent = data.room.max_rounds;
 
+        // BGM Logic
+        if (gameState.status === 'lobby' || gameState.status === 'ended') {
+            sfx.playBGM();
+        } else if (gameState.status === 'drawing' || gameState.status === 'countdown') {
+            sfx.stopBGM();
+        }
+
         if (data.round.time_left !== undefined) {
             const now = Math.floor(Date.now() / 1000);
             gameState.endTime = now + data.round.time_left;
@@ -393,6 +400,16 @@ async function syncState() {
             if (tools) tools.classList.remove('hidden');
         } else {
             if (tools) tools.classList.add('hidden');
+        }
+
+        // Reaction Bar visibility
+        const reactionBar = document.getElementById('reaction-bar');
+        if (reactionBar) {
+            if (gameState.status === 'lobby' || gameState.status === 'finished' || gameState.status === 'game_over') {
+                reactionBar.classList.add('hidden');
+            } else {
+                reactionBar.classList.remove('hidden');
+            }
         }
 
         // Overlays
@@ -703,6 +720,11 @@ async function syncChat() {
 
                 const username = m.username || 'System';
 
+                if (m.type === 'reaction') {
+                    showReaction(m.message);
+                    return; // Don't add to chat scroll
+                }
+
                 const createMsg = () => {
                     const div = document.createElement('div');
                     div.className = "chat-msg transition-all duration-300";
@@ -827,6 +849,39 @@ async function submitChat(msg) {
     syncChat();
 }
 
+async function sendReaction(emoji) {
+    // Optimistic local feedback sound
+    try { sfx.play('pop'); } catch (e) { }
+    await fetch('api/chat.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: player.token, action: 'reaction', emoji: emoji })
+    });
+    // Immediately show locally too for better feel
+    showReaction(emoji);
+}
+
+function showReaction(emoji) {
+    const container = document.getElementById('canvas-container');
+    if (!container) return;
+
+    const el = document.createElement('div');
+    el.className = "absolute pointer-events-none text-4xl z-40 transition-all duration-1000 ease-out";
+    el.style.left = (20 + Math.random() * 60) + "%";
+    el.style.bottom = "20%";
+    el.innerText = emoji;
+
+    container.appendChild(el);
+
+    // Animate
+    requestAnimationFrame(() => {
+        el.style.transform = `translate(${(Math.random() - 0.5) * 100}px, -200px) scale(1.5)`;
+        el.style.opacity = "0";
+    });
+
+    setTimeout(() => el.remove(), 1000);
+}
+
 function setColor(c) {
     try { sfx.play('pop'); } catch (e) { }
     gameState.color = c;
@@ -882,5 +937,5 @@ async function leaveRoom() {
     } catch (e) { }
 
     localStorage.removeItem('dg_player');
-    window.location.href = 'index.php';
+    window.location.href = '/drawguess/';
 }

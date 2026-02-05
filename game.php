@@ -6,6 +6,13 @@
     <title>Draw & Guess - In Game</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#facc15">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+    </script>
     <script>
         tailwind.config = {
             theme: {
@@ -202,6 +209,14 @@
                  <!-- Wrapper for Border & Positioning -->
                  <div class="relative w-full h-full max-w-full max-h-full neo-border bg-white shadow-none isolate">
                      <canvas id="game-canvas" class="block w-full h-full cursor-crosshair touch-none select-none outline-none"></canvas>
+                     
+                     <!-- Reaction Bar (Floating) -->
+                     <div id="reaction-bar" class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-30 transition-all duration-300">
+                        <button onclick="sendReaction('😂')" class="w-10 h-10 md:w-12 md:h-12 bg-white/90 border-2 border-ink rounded-full shadow-[2px_2px_0px_#000] hover:scale-110 active:scale-95 transition flex items-center justify-center text-xl md:text-2xl backdrop-blur-sm">😂</button>
+                        <button onclick="sendReaction('❤️')" class="w-10 h-10 md:w-12 md:h-12 bg-white/90 border-2 border-ink rounded-full shadow-[2px_2px_0px_#000] hover:scale-110 active:scale-95 transition flex items-center justify-center text-xl md:text-2xl backdrop-blur-sm">❤️</button>
+                        <button onclick="sendReaction('😮')" class="w-10 h-10 md:w-12 md:h-12 bg-white/90 border-2 border-ink rounded-full shadow-[2px_2px_0px_#000] hover:scale-110 active:scale-95 transition flex items-center justify-center text-xl md:text-2xl backdrop-blur-sm">😮</button>
+                        <button onclick="sendReaction('👏')" class="w-10 h-10 md:w-12 md:h-12 bg-white/90 border-2 border-ink rounded-full shadow-[2px_2px_0px_#000] hover:scale-110 active:scale-95 transition flex items-center justify-center text-xl md:text-2xl backdrop-blur-sm">👏</button>
+                     </div>
 
                      <!-- Game Overlay -->
                      <div id="overlay" class="absolute inset-0 z-20 hidden flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm transition-opacity p-4">

@@ -1,0 +1,20 @@
+RewriteEngine On
+RewriteBase /drawguess/
+
+# Redirect index.php to root
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /drawguess/index\.php\ HTTP/
+RewriteRule ^index\.php$ /drawguess/ [R=301,L]
+
+# Clean Room URLs: /room/CODE -> game.php?code=CODE
+RewriteRule ^room/([A-Za-z0-9]+)/?$ game.php?room=$1 [QSA,L]
+
+# Admin URLs
+RewriteRule ^admin/?$ admin/index.php [L]
+RewriteRule ^admin/words/?$ admin/words.php [L]
+RewriteRule ^admin/avatars/?$ admin/avatars.php [L]
+RewriteRule ^admin/music/?$ admin/music.php [L]
+
+# API and Assets should be left alone
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /drawguess/index.php [L]

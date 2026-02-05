@@ -93,6 +93,14 @@ if ($action === 'send') {
     jsonResponse(['success' => true]);
 }
 
+if ($action === 'reaction') {
+    $emoji = sanitize($conn, $_POST['emoji'] ?? '');
+    if (!$emoji) jsonResponse(['error' => 'No emoji'], false);
+    
+    mysqli_query($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES ($room_id, " . ($round ? $round['id'] : 'NULL') . ", {$player['id']}, '$emoji', 'reaction')");
+    jsonResponse(['success' => true]);
+}
+
 if ($action === 'fetch') {
     $last_id = isset($_GET['last_id']) ? intval($_GET['last_id']) : 0;
     
