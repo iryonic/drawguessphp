@@ -1,9 +1,9 @@
 <?php
 require_once 'db.php';
 
-$token = $_POST['token'] ?? $_GET['token'] ?? '';
+$token = sanitize($conn, $_POST['token'] ?? $_GET['token'] ?? '');
 $player_q = mysqli_query($conn, "SELECT id, room_id, username, score FROM players WHERE session_token = '$token'");
-if (mysqli_num_rows($player_q) === 0) jsonResponse(['error' => 'Invalid'], false);
+if (mysqli_num_rows($player_q) === 0) jsonResponse(['error' => 'Invalid Session'], false);
 
 $player = mysqli_fetch_assoc($player_q);
 $room_id = $player['room_id'];
@@ -41,11 +41,8 @@ if ($action === 'send') {
                   jsonResponse(['success' => true]); // Ignore duplicate
              }
              
-             // SCORING
-             // Rank
-             $rank_q = mysqli_query($conn, "SELECT COUNT(id) as cnt FROM messages WHERE round_id = {$round['id']} AND type = 'guess'");
-             $rank = intval(mysqli_fetch_assoc($rank_q)['cnt']);
-             $rank_bonus = ($rank == 0) ? 50 : (($rank == 1) ? 30 : (($rank == 2) ? 10 : 0));
+             // SCORING (Low Intensity: Max ~50 per round)
+             $rank_bonus = ($rank == 0) ? 10 : (($rank == 1) ? 5 : (($rank == 2) ? 2 : 0));
              
              // Time & Duration
              $room_s_q = mysqli_query($conn, "SELECT round_duration FROM rooms WHERE id = $room_id");
@@ -59,18 +56,17 @@ if ($action === 'send') {
                  $hints = count(explode(',', $round['hints_mask']));
              }
              
-             // Formula
-             $score = ceil(300 * ($time_left / $dur)) + $rank_bonus - ($hints * 30);
-             $score = max(10, $score);
+             // Formula: Max 40 (time) + 10 (rank) - penalty
+             $score = ceil(40 * ($time_left / $dur)) + $rank_bonus - ($hints * 5);
+             $score = max(1, $score);
              
              // Update Guesser
              mysqli_query($conn, "UPDATE players SET score = score + $score WHERE id = {$player['id']}");
              
-             // Update Drawer
-             mysqli_query($conn, "UPDATE players SET score = score + 30 WHERE id = {$round['drawer_id']}");
+             // Removed Drawer update here to prevent double-counting (handled in game_state.php)
              
              // Log Guess (type=guess)
-             mysqli_query($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES ($room_id, {$round['id']}, {$player['id']}, 'guessed the word!', 'guess')");
+             mysqli_query($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES ($room_id, {$round['id']}, {$player['id']}, 'guessed the word correctly!', 'guess')");
              
              // Check End Round (All guessed?)
              $p_q = mysqli_query($conn, "SELECT COUNT(*) as c FROM players WHERE room_id = $room_id AND id != {$round['drawer_id']}");
@@ -83,6 +79,12 @@ if ($action === 'send') {
              
              jsonResponse(['success' => true]);
         }
+        
+        // Bonus: "Close!" check (if off by 1-2 chars)
+        $dist = levenshtein(strtolower(trim($msg)), strtolower($current_word));
+        if ($dist <= 2 && $dist > 0 && strlen($current_word) > 3) {
+            mysqli_query($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES ($room_id, {$round['id']}, {$player['id']}, 'is so close!', 'system')");
+        }
     }
     
     // Normal chat
@@ -94,22 +96,26 @@ if ($action === 'send') {
 if ($action === 'fetch') {
     $last_id = isset($_GET['last_id']) ? intval($_GET['last_id']) : 0;
     
-    $stmt = mysqli_prepare($conn, "SELECT id, player_id, message, type, created_at FROM messages WHERE room_id = ? AND id > ? ORDER BY id ASC");
-    mysqli_stmt_bind_param($stmt, "ii", $room_id, $last_id);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
+    // Improved query with JOIN to get usernames in one go
+    $sql = "SELECT m.id, m.player_id, m.message, m.type, m.created_at, p.username 
+            FROM messages m 
+            LEFT JOIN players p ON m.player_id = p.id 
+            WHERE m.room_id = $room_id AND m.id > $last_id 
+            ORDER BY m.id ASC";
+            
+    $res = mysqli_query($conn, $sql);
     
     $messages = [];
     while ($row = mysqli_fetch_assoc($res)) {
+        if (!$row['username']) {
+            $row['username'] = 'System';
+        }
+        
         if ($row['type'] === 'guess') {
-            $p_res = mysqli_query($conn, "SELECT username FROM players WHERE id = " . $row['player_id']);
-            $row['username'] = mysqli_fetch_assoc($p_res)['username'];
-            $row['message'] = "guessed the word!";
-            $row['is_system'] = true; // Use system style in UI
-        } else {
-            $p_res = mysqli_query($conn, "SELECT username FROM players WHERE id = " . $row['player_id']);
-            $p_row = mysqli_fetch_assoc($p_res);
-            $row['username'] = $p_row ? $p_row['username'] : 'System';
+            $row['message'] = "guessed the word correctly!";
+            $row['is_system'] = true;
+        } elseif ($row['type'] === 'system') {
+            $row['is_system'] = true;
         }
         $messages[] = $row;
     }

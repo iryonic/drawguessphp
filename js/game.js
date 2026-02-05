@@ -70,23 +70,14 @@ if (window.innerWidth < 1024) {
 window.addEventListener('resize', resizeCanvas);
 
 function resizeCanvas() {
-    // Canvas fills the wrapper (w-full h-full). 
-    // We match internal resolution to displayed size.
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+    // Round to avoid sub-pixel rendering issues which can cause drift
+    canvas.width = Math.floor(rect.width);
+    canvas.height = Math.floor(rect.height);
 }
 
 // ... (lines 80-211 skipped) ...
 
-function getNormalizedPos(evt) {
-    const rect = canvas.getBoundingClientRect();
-    // Normalize based on CURRENT displayed rect, not potentially stale canvas.width
-    return {
-        x: Math.max(0, Math.min(1, (evt.clientX - rect.left) / rect.width)),
-        y: Math.max(0, Math.min(1, (evt.clientY - rect.top) / rect.height))
-    };
-}
 
 // Listeners
 if (canvas) {
@@ -187,8 +178,9 @@ function switchTab(tab) {
 }
 
 function updateLocalTimer() {
-    // If not drawing, clear timer visual
-    if (gameState.status !== 'drawing') {
+    // If not in a state with a timer, clear timer visual
+    const statesWithTimer = ['drawing', 'choosing', 'countdown', 'ended', 'game_over'];
+    if (!statesWithTimer.includes(gameState.status)) {
         if (timerEl) timerEl.innerText = "--";
         if (timerProgress) timerProgress.style.strokeDashoffset = 0;
         return;
@@ -200,16 +192,25 @@ function updateLocalTimer() {
 
     if (timerEl) {
         timerEl.innerText = left;
-        // Pulse red when low time
+        // Pulse red and play tick when low time
         if (left <= 10 && left > 0) {
             timerEl.classList.add('text-red-600', 'animate-pulse');
+            // Ambient Tension: Play tick sound during drawing phase
+            if (gameState.status === 'drawing') {
+                try { sfx.play('tick'); } catch (e) { }
+            }
         } else {
             timerEl.classList.remove('text-red-600', 'animate-pulse');
         }
     }
 
     if (timerProgress) {
-        const total = gameState.totalTime || 60;
+        let total = gameState.totalTime || 60;
+        if (gameState.status === 'choosing') total = 7;
+        if (gameState.status === 'countdown') total = 3;
+        if (gameState.status === 'ended') total = 10;
+        if (gameState.status === 'game_over') total = 15;
+
         // If time is up, offset is 100 (empty). If full, 0.
         // pct = percentage remaining. 1.0 = full. 0.0 = empty.
         const pct = Math.min(1, Math.max(0, left / total));
@@ -221,11 +222,11 @@ function updateLocalTimer() {
 
 function getNormalizedPos(evt) {
     const rect = canvas.getBoundingClientRect();
-    const x = (evt.clientX - rect.left);
-    const y = (evt.clientY - rect.top);
+    // Use clientX/Y which are relative to the viewport, same as rect.
+    // Use rect.width/height (displayed size) for normalization.
     return {
-        x: parseFloat((x / canvas.width).toFixed(4)),
-        y: parseFloat((y / canvas.height).toFixed(4))
+        x: (evt.clientX - rect.left) / rect.width,
+        y: (evt.clientY - rect.top) / rect.height
     };
 }
 
@@ -351,7 +352,17 @@ async function syncState() {
         }
 
         gameState.roundId = data.round.id;
+        const oldStatus = gameState.status;
         gameState.status = data.round.status || 'lobby';
+
+        if (oldStatus === 'choosing' && gameState.status !== 'choosing') {
+            if (wordSelect) wordSelect.innerHTML = '';
+        }
+
+        // Round End Sound
+        if (oldStatus === 'drawing' && gameState.status === 'ended') {
+            try { sfx.play('ding'); } catch (e) { }
+        }
 
         if (document.getElementById('game-status-text'))
             document.getElementById('game-status-text').textContent = gameState.status === 'lobby' ? 'LOBBY' : gameState.status.toUpperCase();
@@ -418,13 +429,12 @@ async function syncState() {
             if (isMe) {
                 if (overlayTitle) overlayTitle.textContent = "IT'S YOUR TURN!";
                 if (overlaySubtitle) {
-                    overlaySubtitle.textContent = "Choose a Word to Draw";
+                    const left = Math.max(0, Math.ceil(gameState.endTime - Date.now() / 1000));
+                    overlaySubtitle.innerHTML = `Choose a Word to Draw <br> <span class="text-3xl font-black text-pop-pink animate-pulse">${left}s</span>`;
                     overlaySubtitle.classList.remove('hidden');
                 }
                 if (wordSelect) {
-                    wordSelect.innerHTML = '';
                     wordSelect.classList.remove('hidden');
-                    // Check round.options instead of data.words
                     const options = data.round.options || data.words || [];
                     if (options.length > 0 && wordSelect.children.length === 0) {
                         options.forEach(w => {
@@ -462,7 +472,7 @@ async function syncState() {
         } else if (gameState.status === 'drawing') {
             if (overlay) overlay.classList.add('hidden');
             if (data.round.word) {
-                if (wordDisplay) wordDisplay.textContent = data.round.word.split('').join(' ');
+                if (wordDisplay) wordDisplay.textContent = data.round.word;
             } else {
                 if (wordDisplay) wordDisplay.textContent = "";
             }
@@ -597,6 +607,19 @@ function renderLoop() {
                 continue;
             }
 
+            if (s.color === 'UNDO') {
+                strokeHistory.pop(); // Remove last known stroke
+                // Full Redraw
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const tempHistory = [...strokeHistory];
+                strokeHistory = []; // Reset because drawLine pushes to it
+                tempHistory.forEach(oldS => {
+                    if (oldS.type === 'dot') drawDot(oldS.x, oldS.y, oldS.color, oldS.size);
+                    else drawLine(oldS.x1, oldS.y1, oldS.x2, oldS.y2, oldS.color, oldS.size);
+                });
+                continue;
+            }
+
             const points = s.points;
             if (!points || points.length < 1) continue;
 
@@ -678,18 +701,34 @@ async function syncChat() {
             res.data.messages.forEach(m => {
                 if (m.id > gameState.lastMsgId) gameState.lastMsgId = m.id;
 
+                const username = m.username || 'System';
+
                 const createMsg = () => {
                     const div = document.createElement('div');
                     div.className = "chat-msg transition-all duration-300";
-                    if (m.type === 'system' || m.type === 'guess') {
-                        if (m.type === 'guess') try { sfx.play('ding'); } catch (e) { }
-                        div.className = "text-xs text-center font-bold px-3 py-2 rounded-lg border mx-2 my-2 shadow-[2px_2px_0px_#000]";
-                        div.classList.add(m.type === 'guess' ? 'bg-green-100 text-green-800 border-green-800' : 'bg-yellow-100 text-yellow-800 border-yellow-800');
-                        div.innerText = m.type === 'guess' ? `🎉 ${m.username} guessed it!` : m.message;
+
+                    if (m.type === 'guess' || m.is_system) {
+                        if (m.type === 'guess') {
+                            try {
+                                sfx.play('success');
+                                confetti({
+                                    particleCount: 100,
+                                    spread: 70,
+                                    origin: { y: 0.6 },
+                                    colors: ['#b9f6ca', '#ffeb3b', '#4fc3f7', '#ff80ab']
+                                });
+                            } catch (e) { }
+                            div.className = "text-sm text-center font-black px-4 py-3 rounded-xl border-2 mx-2 my-4 shadow-[4px_4px_0px_#1e1e1e] bg-pop-green text-black border-black transform rotate-1 animate-bounce";
+                            div.innerText = `🎉 ${username} guessed the word correctly!`;
+                        } else {
+                            // System
+                            div.className = "text-xs text-center font-bold px-3 py-2 rounded-lg border-2 mx-2 my-2 shadow-[2px_2px_0px_#1e1e1e] bg-pop-yellow text-black border-black";
+                            div.innerText = m.message;
+                        }
                     } else {
                         try { sfx.play('pop'); } catch (e) { }
                         div.className = "text-sm mb-2 break-words p-2 rounded-lg mx-2 flex flex-col bg-white border-2 border-gray-100";
-                        div.innerHTML = `<span class="font-bold text-black text-[10px] uppercase tracking-wide mb-0.5">${m.username}</span> <span class="text-gray-800">${m.message}</span>`;
+                        div.innerHTML = `<span class="font-bold text-black text-[10px] uppercase tracking-wide mb-0.5">${username}</span> <span class="text-gray-800">${m.message}</span>`;
                     }
                     return div;
                 };
@@ -708,12 +747,18 @@ async function syncChat() {
                         const toast = document.createElement('div');
 
                         if (m.type === 'guess' || m.type === 'system') {
-                            toast.className = "bg-white/95 backdrop-blur border-2 border-ink px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_rgba(0,0,0,0.1)] text-xs font-bold transition-all transform translate-y-2 opacity-0";
-                            toast.classList.add(m.type === 'guess' ? 'text-green-700 border-green-200' : 'text-yellow-700 border-yellow-200');
-                            toast.innerHTML = m.type === 'guess' ? `🎉 ${m.username} guessed!` : m.message;
-                        } else {
+                            toast.className = "backdrop-blur border-2 border-ink px-4 py-2 rounded-xl shadow-[4px_4px_0px_rgba(0,0,0,1)] text-xs font-black transition-all transform translate-y-2 opacity-0";
+                            if (m.type === 'guess') {
+                                toast.classList.add('bg-pop-green', 'text-black');
+                                toast.innerHTML = `🎉 ${username} guessed correctly!`;
+                            } else {
+                                toast.classList.add('bg-pop-yellow', 'text-black');
+                                toast.innerHTML = `${username} ${m.message}`;
+                            }
+                        }
+                        else {
                             toast.className = "bg-white/90 backdrop-blur border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm text-xs flex gap-1 transition-all transform translate-y-2 opacity-0";
-                            toast.innerHTML = `<span class="font-black text-ink uppercase tracking-wide">${m.username}:</span> <span class="text-gray-800">${m.message}</span>`;
+                            toast.innerHTML = `<span class="font-black text-ink uppercase tracking-wide">${username}:</span> <span class="text-gray-800">${m.message}</span>`;
                         }
 
                         toastContainer.appendChild(toast);
@@ -804,4 +849,38 @@ function clearCanvasAction() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'clear' })
     });
+}
+
+function undoAction() {
+    try { sfx.play('pop'); } catch (e) { }
+    // Local Optimistic Undo
+    strokeHistory.pop();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const tempHistory = [...strokeHistory];
+    strokeHistory = [];
+    tempHistory.forEach(oldS => {
+        if (oldS.type === 'dot') drawDot(oldS.x, oldS.y, oldS.color, oldS.size);
+        else drawLine(oldS.x1, oldS.y1, oldS.x2, oldS.y2, oldS.color, oldS.size);
+    });
+
+    fetch('api/draw_sync.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: player.token, action: 'undo' })
+    });
+}
+
+async function leaveRoom() {
+    if (!confirm('Are you sure you want to leave the game?')) return;
+
+    try {
+        await fetch('api/rooms.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ token: player.token, action: 'leave' })
+        });
+    } catch (e) { }
+
+    localStorage.removeItem('dg_player');
+    window.location.href = 'index.php';
 }

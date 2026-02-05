@@ -66,6 +66,15 @@ if ($action === 'clear') {
     jsonResponse(['success' => true]);
 }
 
+if ($action === 'undo') {
+    if ($player['id'] != $round['drawer_id']) {
+        jsonResponse(['error' => 'Not your turn'], false);
+    }
+    // Marker for other clients to pop their last stroke
+    mysqli_query($conn, "INSERT INTO strokes (round_id, color, size, points, sequence_id) VALUES ({$round['id']}, 'UNDO', 0, '[]', 888888)");
+    jsonResponse(['success' => true]);
+}
+
 if ($action === 'fetch') {
     $last_id = intval($_GET['last_id'] ?? 0);
     

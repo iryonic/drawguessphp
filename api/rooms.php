@@ -76,10 +76,14 @@ if ($action === 'create') {
             VALUES ('{$room['id']}', '$username', '$avatar', 0, '$token')";
     
     if (mysqli_query($conn, $sql)) {
+        $pid = mysqli_insert_id($conn);
+        $uname = mysqli_real_escape_string($conn, $username);
+        mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ({$room['id']}, 0, '$uname joined the room', 'system')");
+
         jsonResponse([
             'room_id' => $room['id'],
             'room_code' => $room_code,
-            'player_id' => mysqli_insert_id($conn),
+            'player_id' => $pid,
             'username' => $username,
             'avatar' => $avatar,
             'is_host' => false,
@@ -88,6 +92,19 @@ if ($action === 'create') {
     } else {
         jsonResponse(['error' => 'Failed to join room: ' . mysqli_error($conn)], false);
     }
+} elseif ($action === 'leave') {
+    $token = sanitize($conn, $_POST['token'] ?? '');
+    $res = mysqli_query($conn, "SELECT id, room_id, username FROM players WHERE session_token = '$token'");
+    if ($row = mysqli_fetch_assoc($res)) {
+        $pid = $row['id'];
+        $rid = $row['room_id'];
+        $uname = mysqli_real_escape_string($conn, $row['username']);
+        
+        mysqli_query($conn, "DELETE FROM players WHERE id = $pid");
+        mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($rid, 0, '$uname left the room', 'system')");
+        jsonResponse(['success' => true]);
+    }
+    jsonResponse(['error' => 'Not found'], false);
 } else {
     jsonResponse(['error' => 'Invalid action'], false);
 }

@@ -124,7 +124,7 @@
         <!-- Center: Word/Status -->
         <div class="absolute left-1/2 -translate-x-1/2 top-1 md:top-3 w-32 md:w-64 text-center z-10 pointer-events-none">
              <div class="bg-white border-2 border-ink rounded-lg md:rounded-xl px-2 py-0.5 md:py-1 shadow-[2px_2px_0px_#000] md:shadow-[3px_3px_0px_#000] relative overflow-hidden pointer-events-auto">
-                <div id="word-display" class="font-mono font-bold text-sm md:text-xl tracking-widest truncate leading-tight">WAITING</div>
+                <div id="word-display" class="font-mono font-bold text-sm md:text-xl truncate leading-tight">WAITING</div>
                 <div class="absolute top-0 left-0 w-1 h-full bg-pop-pink"></div>
              </div>
         </div>
@@ -147,6 +147,11 @@
                 </svg>
                 <span id="timer" class="font-mono font-bold text-xs md:text-lg">60</span>
             </div>
+
+            <!-- Leave Button -->
+            <button onclick="leaveRoom()" class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-red-50 border-2 border-ink rounded-lg shadow-[2px_2px_0px_#000] hover:bg-red-100 transition active:translate-y-0.5 active:shadow-none" title="Leave Room">
+                <span class="text-sm md:text-lg">🏃</span>
+            </button>
         </div>
     </header>
 
@@ -183,11 +188,12 @@
                         <span class="absolute inset-0 flex items-center justify-center text-[10px] md:text-xs">🧼</span>
                     </button>
                 </div>
-                <!-- Size & Clear -->
-                <div class="flex items-center gap-2 md:gap-4 pl-2 md:pl-4 border-l-2 border-gray-100 shrink-0">
+                <!-- Size & Actions -->
+                <div class="flex items-center gap-1 md:gap-3 pl-2 md:pl-4 border-l-2 border-gray-100 shrink-0">
                     <input type="range" min="2" max="40" value="5" id="brush-size" onchange="setSize(this.value)" 
-                        class="w-16 md:w-24 h-2 md:h-3 bg-gray-200 rounded-full appearance-none cursor-pointer accent-ink border border-gray-300">
-                    <button onclick="clearCanvasAction()" class="neo-btn p-1.5 md:p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs md:text-base">🗑️</button>
+                        class="w-12 md:w-24 h-2 md:h-3 bg-gray-200 rounded-full appearance-none cursor-pointer accent-ink border border-gray-300">
+                    <button onclick="undoAction()" class="neo-btn p-1.5 md:p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs md:text-base" title="Undo Last Stroke">↩️</button>
+                    <button onclick="clearCanvasAction()" class="neo-btn p-1.5 md:p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs md:text-base" title="Clear Canvas">🗑️</button>
                 </div>
             </div>
 
@@ -205,7 +211,7 @@
                             <!-- Word Selection -->
                             <div id="word-selection" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 w-full"></div>
                             <!-- Start Button -->
-                            <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-2 md:py-4 pl-28 bg-pop-green text-base md:text-xl font-bold rounded-xl hover:bg-green-300 mt-2 md:mt-4 active:scale-95 transition-transform shrink-0">
+                            <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-2 md:py-4 px-auto bg-pop-green text-base md:text-xl font-bold rounded-xl hover:bg-green-300 mt-2 md:mt-4 active:scale-95 transition-transform shrink-0">
                                 START GAME 🎮
                             </button>
                         </div>
@@ -278,6 +284,9 @@
     </div>
 
     <!-- Scripts -->
+    <!-- Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
     <script src="js/sounds.js"></script>
     <script src="js/game.js"></script>
     <script>

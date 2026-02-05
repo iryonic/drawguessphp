@@ -66,6 +66,9 @@ class SoundManager {
             case 'win': // Fanfare
                 this.arpeggio([523, 659, 784, 1046, 1318, 1568, 2093], 0.1);
                 break;
+            case 'success': // Recognition/Guess Correct
+                this.arpeggio([784, 1046, 1318], 0.08); // G5, C6, E6
+                break;
         }
     }
 
