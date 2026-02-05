@@ -191,7 +191,7 @@
                 <div class="space-y-4 pt-2">
                     <button onclick="openCreateModal()" 
                         class="w-full btn-pop bg-pop-blue hover:bg-sky-300 text-black font-bold py-4 px-6 rounded-2xl text-lg flex items-center justify-center gap-2 group">
-                        <span class="group-hover:rotate-12 transition">✨</span> Create Private Room
+                        <span class="group-hover:rotate-12 transition">🖊️</span> Create Private Room
                     </button>
                     
                     <div class="relative flex py-1 items-center justify-center text-gray-400 text-xs font-bold uppercase tracking-widest">
@@ -215,10 +215,10 @@
         <!-- Footer Info -->
          <div class="flex items-center justify-center gap-1 text-xs font-bold text-gray-400 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition duration-500">
             <div class="flex items-center gap-1">
-                Powered By 
+              Version 1.0  Developed by 
             </div>
             <div class="flex items-center gap-1">
-                <a href="https://irfanamanzoor.in"><span>EXORA.DEVS</span> </a>
+                <a href="https://irfanamanzoor.in"><span>Irfan Manzoor</span> </a>
             </div>
          </div>
 

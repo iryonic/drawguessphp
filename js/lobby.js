@@ -1,25 +1,57 @@
-const avatars = ['🐱', '🐶', '🦁', '🦊', '🐸', '🐼', '🐨', '🐷'];
 const avatarList = document.getElementById('avatar-list');
 const avatarInput = document.getElementById('selected-avatar');
+let avatars = [];
 
-// Init avatars
-avatars.forEach(av => {
-    const div = document.createElement('div');
-    // Creative Fun Theme Classes
-    const baseClass = "avatar-tile flex-shrink-0";
-    div.className = `${baseClass} ${av === '🐱' ? 'selected' : ''}`;
-    div.innerText = av;
+// Init Avatars
+async function loadAvatars() {
+    try {
+        const res = await (await fetch('api/avatars.php')).json();
+        console.log("Avatars Loaded:", res);
 
-    div.onclick = () => {
-        document.querySelectorAll('.avatar-tile').forEach(el => {
-            el.classList.remove('selected');
-        });
-        div.classList.add('selected');
-        avatarInput.value = av;
-        try { sfx.play('pop'); } catch (e) { }
-    };
-    avatarList.appendChild(div);
-});
+        if (res.success && res.data && Array.isArray(res.data) && res.data.length > 0) {
+            avatars = res.data;
+        } else {
+            // Fallback
+            avatars = ['🐱', '🐶', '🦁', '🦊', '🐸', '🐼', '🐨', '🐷'];
+        }
+        renderAvatars();
+    } catch (e) {
+        console.error("Failed to load avatars", e);
+        avatars = ['🐱', '🐶', '🦁', '🦊', '🐸', '🐼', '🐨', '🐷'];
+        renderAvatars();
+    }
+}
+
+function renderAvatars() {
+    avatarList.innerHTML = '';
+    avatars.forEach((av, index) => {
+        const div = document.createElement('div');
+        const baseClass = "avatar-tile flex-shrink-0";
+
+        div.className = baseClass;
+
+        // Auto-select first if none selected or matches
+        const currentVal = avatarInput.value;
+        if ((index === 0 && (currentVal === '🐱' || currentVal === '')) || currentVal === av) {
+            div.classList.add('selected');
+            avatarInput.value = av;
+        }
+
+        div.innerText = av;
+
+        div.onclick = () => {
+            document.querySelectorAll('.avatar-tile').forEach(el => {
+                el.classList.remove('selected');
+            });
+            div.classList.add('selected');
+            avatarInput.value = av;
+            try { sfx.play('pop'); } catch (e) { }
+        };
+        avatarList.appendChild(div);
+    });
+}
+
+loadAvatars();
 
 async function apiRequest(endpoint, data) {
     try {

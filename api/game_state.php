@@ -137,6 +137,23 @@ if ($round) {
             // $round status will be updated next poll
         }
     }
+    
+    // 4. GAME OVER -> NEW GAME
+    elseif ($round['status'] === 'game_over') {
+        if ($timeLeft <= 0) {
+            // AUTO RESTART
+             $pq = mysqli_query($conn, "SELECT id FROM players WHERE room_id = $room_id");
+             $p_ids = [];
+             while($p = mysqli_fetch_assoc($pq)) $p_ids[] = $p['id'];
+             shuffle($p_ids);
+             foreach($p_ids as $idx => $pid) {
+                mysqli_query($conn, "UPDATE players SET turn_order = $idx, score = 0 WHERE id = $pid");
+             }
+             mysqli_query($conn, "UPDATE rooms SET status = 'playing', current_round = 1 WHERE id = $room_id");
+             mysqli_query($conn, "DELETE FROM rounds WHERE room_id = $room_id");
+             startNextTurn($conn, $room_id);
+        }
+    }
 }
 
 // --- BUILD RESPONSE ---
@@ -162,7 +179,7 @@ if ($round) {
         'id' => $round['id'],
         'status' => $round['status'],
         'drawer_id' => $round['drawer_id'],
-        'time_left' => ($round['status'] == 'drawing') ? max(0, intval($round['sql_time_left'])) : 0,
+        'time_left' => ($round['status'] == 'drawing' || $round['status'] == 'countdown' || $round['status'] == 'ended' || $round['status'] == 'game_over') ? max(0, intval($round['sql_time_left'])) : 0,
         'round_number' => $round['round_number'], // Global round
         'elapsed' => $round['elapsed'] ?? 0
     ];
@@ -222,7 +239,7 @@ jsonResponse([
 
 function startNextTurn($conn, $room_id) {
     // Determine Next Turn
-    $cnt_q = mysqli_query($conn, "SELECT COUNT(*) as c FROM rounds WHERE room_id = $room_id");
+    $cnt_q = mysqli_query($conn, "SELECT COUNT(*) as c FROM rounds WHERE room_id = $room_id AND status != 'game_over'");
     $cnt_row = mysqli_fetch_assoc($cnt_q);
     $turns_done = intval($cnt_row['c']);
     
@@ -240,6 +257,8 @@ function startNextTurn($conn, $room_id) {
     
     if ($global_round > $max_rounds) {
         mysqli_query($conn, "UPDATE rooms SET status = 'finished' WHERE id = $room_id");
+        // Create Game Over Timer Round
+        mysqli_query($conn, "INSERT INTO rounds (room_id, round_number, status, start_time, end_time) VALUES ($room_id, 0, 'game_over', NOW(), DATE_ADD(NOW(), INTERVAL 15 SECOND))");
         return;
     }
     

@@ -70,12 +70,22 @@ if (window.innerWidth < 1024) {
 window.addEventListener('resize', resizeCanvas);
 
 function resizeCanvas() {
-    const container = document.getElementById('canvas-container');
-    if (container) {
-        const rect = container.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-    }
+    // Canvas fills the wrapper (w-full h-full). 
+    // We match internal resolution to displayed size.
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+}
+
+// ... (lines 80-211 skipped) ...
+
+function getNormalizedPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    // Normalize based on CURRENT displayed rect, not potentially stale canvas.width
+    return {
+        x: Math.max(0, Math.min(1, (evt.clientX - rect.left) / rect.width)),
+        y: Math.max(0, Math.min(1, (evt.clientY - rect.top) / rect.height))
+    };
 }
 
 // Listeners
@@ -273,14 +283,25 @@ function endDraw() {
 async function sendStrokes() {
     if (pointsBuffer.length === 0) return;
 
+    // Prevention of gaps: If existing buffer only has the carry-over point, don't resend
+    if (painting && pointsBuffer.length === 1) return;
+
+    const pointsToSend = pointsBuffer;
     const data = {
         token: player.token,
         action: 'draw',
         color: gameState.color,
         size: gameState.size,
-        points: JSON.stringify(pointsBuffer)
+        points: JSON.stringify(pointsToSend)
     };
-    pointsBuffer = [];
+
+    // Critical Fix: Retain last point to bridge the gap to the next batch
+    if (painting && pointsBuffer.length > 0) {
+        const last = pointsBuffer[pointsBuffer.length - 1];
+        pointsBuffer = [last];
+    } else {
+        pointsBuffer = [];
+    }
 
     await fetch('api/draw_sync.php', {
         method: 'POST',
@@ -463,6 +484,36 @@ async function syncState() {
             }
             if (wordSelect) wordSelect.classList.add('hidden');
             if (startBtn) startBtn.classList.add('hidden');
+
+        } else if (gameState.status === 'finished' || gameState.status === 'game_over') {
+            if (overlay) overlay.classList.remove('hidden');
+
+            // Find Winner
+            const winner = data.players.length > 0 ? data.players[0] : { username: 'Nobody', avatar: '👻' };
+
+            if (overlayTitle) overlayTitle.textContent = `GAME OVER!`;
+
+            const timeLeft = data.round.time_left || 0;
+            if (overlaySubtitle) {
+                overlaySubtitle.innerHTML = `
+                    <div class="mb-4">
+                        <div class="text-6xl mb-2 bounce-slow">${winner.avatar}</div>
+                        <div class="text-2xl font-black text-ink uppercase">${winner.username}</div>
+                        <div class="text-lg font-mono font-bold text-pop-purple border-2 border-dashed border-pop-purple rounded-lg px-3 py-1 mt-2 inline-block bg-purple-50">${winner.score} PTS</div>
+                    </div>
+                    ${gameState.status === 'game_over' ? `<div class="text-xs font-extrabold text-gray-500 mt-8 uppercase tracking-widest animate-pulse">Restarting in ${timeLeft}s...</div>` : '<div class="text-xs font-bold text-gray-400 mt-8">Calculating results...</div>'}
+                `;
+                overlaySubtitle.classList.remove('hidden');
+            }
+
+            if (wordSelect) wordSelect.classList.add('hidden');
+            if (startBtn) startBtn.classList.add('hidden');
+
+            // Switch to rank tab on mobile automatically
+            if (window.innerWidth < 1024) switchTab('rank');
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
     } catch (e) { console.error("SyncState Error:", e); }
 }
@@ -533,8 +584,11 @@ requestAnimationFrame(renderLoop);
 
 function renderLoop() {
     if (strokeQueue.length > 0) {
-        // Process queue
+        const start = performance.now();
+        // Process queue with 10ms frame budget to prevent freeze
         while (strokeQueue.length > 0) {
+            if (performance.now() - start > 10) break; // Yield to next frame
+
             const s = strokeQueue.shift();
 
             if (s.color === 'CLEAR') {
@@ -547,26 +601,45 @@ function renderLoop() {
             if (!points || points.length < 1) continue;
 
             // Draw stroke
+            ctx.beginPath();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = s.color;
+            ctx.fillStyle = s.color;
+
             if (points.length === 1) {
                 // Dot
                 const p = points[0];
-                ctx.beginPath();
-                ctx.fillStyle = s.color;
                 ctx.arc(p.x * canvas.width, p.y * canvas.height, s.size / 2, 0, Math.PI * 2);
                 ctx.fill();
             } else {
-                // Line
-                ctx.beginPath();
+                // Smooth Line
                 ctx.lineWidth = s.size;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = s.color;
+                const w = canvas.width;
+                const h = canvas.height;
 
-                const start = points[0];
-                ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
-                for (let i = 1; i < points.length; i++) {
-                    const p = points[i];
-                    ctx.lineTo(p.x * canvas.width, p.y * canvas.height);
+                if (points.length > 2) {
+                    // Quadratic Curve Interpolation for smoothness
+                    ctx.moveTo(points[0].x * w, points[0].y * h);
+
+                    for (let i = 1; i < points.length - 2; i++) {
+                        const xc = (points[i].x + points[i + 1].x) / 2;
+                        const yc = (points[i].y + points[i + 1].y) / 2;
+                        ctx.quadraticCurveTo(points[i].x * w, points[i].y * h, xc * w, yc * h);
+                    }
+                    // Curve through the last two points
+                    ctx.quadraticCurveTo(
+                        points[points.length - 2].x * w,
+                        points[points.length - 2].y * h,
+                        points[points.length - 1].x * w,
+                        points[points.length - 1].y * h
+                    );
+                } else {
+                    // Fallback for short lines
+                    ctx.moveTo(points[0].x * w, points[0].y * h);
+                    for (let i = 1; i < points.length; i++) {
+                        ctx.lineTo(points[i].x * w, points[i].y * h);
+                    }
                 }
                 ctx.stroke();
             }
@@ -576,12 +649,11 @@ function renderLoop() {
 }
 
 async function syncDraw() {
-    // If I'm drawing, I handle my own render instantly.
-    // We skip fetching unless we want to validate sync (not needed for MVP)
-    if (gameState.myTurn && gameState.status === 'drawing') return;
+    // If I'm drawing, skip fetch to avoid latency/double-draw, 
+    // UNLESS I just refreshed (ID=0), then I must fetch history.
+    if (gameState.myTurn && gameState.status === 'drawing' && gameState.lastStrokeId > 0) return;
+
     if (gameState.status !== 'drawing' && gameState.status !== 'ended') return;
-    // ^ Allow sync in 'ended' briefly to catch tail strokes? actually status 'ended' might clear.
-    if (gameState.status !== 'drawing') return;
 
     try {
         const res = await (await fetch(`api/draw_sync.php?token=${player.token}&action=fetch&last_id=${gameState.lastStrokeId}`)).json();
@@ -622,12 +694,47 @@ async function syncChat() {
                     return div;
                 };
 
-                // Add to both desktop and mobile chat boxes
+                // Add to standard chat boxes
                 const chatBoxDesktop = document.getElementById('chat-box');
                 const chatBoxMobile = document.getElementById('chat-box-mobile');
                 [chatBoxDesktop, chatBoxMobile].forEach(box => {
                     if (box) box.prepend(createMsg());
                 });
+
+                // MOBILE TOASTS: Floating chat over canvas
+                if (window.innerWidth < 1024) {
+                    const toastContainer = document.getElementById('canvas-toasts');
+                    if (toastContainer) {
+                        const toast = document.createElement('div');
+
+                        if (m.type === 'guess' || m.type === 'system') {
+                            toast.className = "bg-white/95 backdrop-blur border-2 border-ink px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_rgba(0,0,0,0.1)] text-xs font-bold transition-all transform translate-y-2 opacity-0";
+                            toast.classList.add(m.type === 'guess' ? 'text-green-700 border-green-200' : 'text-yellow-700 border-yellow-200');
+                            toast.innerHTML = m.type === 'guess' ? `🎉 ${m.username} guessed!` : m.message;
+                        } else {
+                            toast.className = "bg-white/90 backdrop-blur border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm text-xs flex gap-1 transition-all transform translate-y-2 opacity-0";
+                            toast.innerHTML = `<span class="font-black text-ink uppercase tracking-wide">${m.username}:</span> <span class="text-gray-800">${m.message}</span>`;
+                        }
+
+                        toastContainer.appendChild(toast);
+
+                        // Animate In
+                        requestAnimationFrame(() => {
+                            toast.classList.remove('translate-y-2', 'opacity-0');
+                        });
+
+                        // Remove after 4s
+                        setTimeout(() => {
+                            toast.classList.add('opacity-0', '-translate-x-4');
+                            setTimeout(() => toast.remove(), 300);
+                        }, 4000);
+
+                        // Limit to 4 toasts
+                        if (toastContainer.children.length > 4) {
+                            toastContainer.removeChild(toastContainer.firstChild);
+                        }
+                    }
+                }
             });
             updatePersist();
         }

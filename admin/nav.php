@@ -5,6 +5,8 @@
             <div class="hidden sm:flex gap-2">
                 <a href="index.php" class="px-3 py-1 rounded hover:bg-white/20 <?= basename($_SERVER['PHP_SELF'])=='index.php'?'bg-white/20':'' ?>">Dashboard</a>
                 <a href="words.php" class="px-3 py-1 rounded hover:bg-white/20 <?= basename($_SERVER['PHP_SELF'])=='words.php'?'bg-white/20':'' ?>">Mange Words</a>
+                <a href="avatars.php" class="px-3 py-1 rounded hover:bg-white/20 <?= basename($_SERVER['PHP_SELF'])=='avatars.php'?'bg-white/20':'' ?>">Mange Avatars</a>
+
             </div>
         </div>
         <div class="flex gap-4 items-center">

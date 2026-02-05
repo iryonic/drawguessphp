@@ -101,50 +101,51 @@
 <body class="h-screen flex flex-col">
 
     <!-- Header / Top Bar -->
-    <header class="h-16 bg-white border-b-[3px] border-ink flex items-center justify-between px-2 md:px-4 shrink-0 z-20 relative shadow-sm gap-2">
+    <header class="h-12 md:h-16 bg-white border-b-[3px] border-ink flex items-center justify-between px-2 md:px-4 shrink-0 z-20 relative shadow-sm gap-2 transition-all">
         <!-- Decoration -->
         <div class="absolute -bottom-1 left-0 w-full h-1 bg-gray-100 hidden"></div>
 
         <!-- Left: Logo & Room Code -->
         <div class="flex items-center gap-2 md:gap-4 shrink-0">
-            <div class="hidden md:flex flex-col leading-none">
+            <div class="md:flex flex-col leading-none hidden">
                 <span class="font-black text-xl italic tracking-tighter transform -rotate-2 bg-pop-yellow px-1 border-2 border-ink shadow-[2px_2px_0px_#000]">DRAW</span>
                 <span class="font-bold text-xs tracking-widest pl-1">GUESS</span>
             </div>
+            <!-- Mobile Logo -->
+            <div class="md:hidden font-black text-lg italic tracking-tighter bg-pop-yellow px-1 border-2 border-ink shadow-[1px_1px_0px_#000]">DG</div>
             
             <div onclick="navigator.clipboard.writeText(this.innerText)" title="Copy Room Code"
-                class="group cursor-pointer flex items-center gap-1.5 bg-gray-100 border-2 border-ink rounded-lg px-2 py-1 hover:bg-pop-blue hover:text-black transition">
-                <span id="room-code-display" class="font-mono text-sm md:text-lg font-bold">????</span>
+                class="group cursor-pointer flex items-center gap-1.5 bg-gray-100 border-2 border-ink rounded-lg px-2 py-0.5 md:py-1 hover:bg-pop-blue hover:text-black transition">
+                <span id="room-code-display" class="font-mono text-xs md:text-lg font-bold">????</span>
                 <svg class="w-3 h-3 md:w-4 md:h-4 text-gray-400 group-hover:text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>
             </div>
         </div>
 
         <!-- Center: Word/Status -->
-        <div class="absolute left-1/2 -translate-x-1/2 top-1.5 md:top-3 w-40 md:w-64 text-center z-10 pointer-events-none">
-             <div class="bg-white border-2 border-ink rounded-xl px-2 py-0.5 md:py-1 shadow-[2px_2px_0px_#000] md:shadow-[3px_3px_0px_#000] relative overflow-hidden pointer-events-auto">
-                <div id="word-display" class="font-mono font-bold text-base md:text-xl tracking-widest truncate leading-tight">WAITING</div>
+        <div class="absolute left-1/2 -translate-x-1/2 top-1 md:top-3 w-32 md:w-64 text-center z-10 pointer-events-none">
+             <div class="bg-white border-2 border-ink rounded-lg md:rounded-xl px-2 py-0.5 md:py-1 shadow-[2px_2px_0px_#000] md:shadow-[3px_3px_0px_#000] relative overflow-hidden pointer-events-auto">
+                <div id="word-display" class="font-mono font-bold text-sm md:text-xl tracking-widest truncate leading-tight">WAITING</div>
                 <div class="absolute top-0 left-0 w-1 h-full bg-pop-pink"></div>
              </div>
-             <div id="game-status-text" class="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1 text-gray-500 bg-white/90 inline-block px-2 rounded-full border border-gray-100 shadow-sm">Lobby</div>
         </div>
 
         <!-- Right: Timer & Round -->
-        <div class="flex items-center gap-2 md:gap-4 shrink-0">
+        <div class="flex items-center gap-1.5 md:gap-4 shrink-0">
             <!-- Round Counter -->
             <div class="flex flex-col items-end leading-none">
                 <span class="text-[8px] md:text-[10px] font-bold uppercase text-gray-400">Rnd</span>
-                <div class="font-black text-lg md:text-xl">
+                <div class="font-black text-sm md:text-xl">
                     <span id="current-round">1</span><span class="text-gray-300">/</span><span id="max-rounds" class="text-gray-400">3</span>
                 </div>
             </div>
 
             <!-- Timer -->
-            <div class="relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center bg-white border-2 border-ink rounded-full shadow-[2px_2px_0px_#000]">
+            <div class="relative w-8 h-8 md:w-12 md:h-12 flex items-center justify-center bg-white border-2 border-ink rounded-full shadow-[2px_2px_0px_#000]">
                 <svg class="absolute inset-0 w-full h-full transform -rotate-90 p-0.5" viewBox="0 0 36 36">
                     <path class="text-gray-100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="4" />
                     <path id="timer-progress" class="text-pop-purple transition-all duration-1000 ease-linear" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="4" />
                 </svg>
-                <span id="timer" class="font-mono font-bold text-sm md:text-lg">60</span>
+                <span id="timer" class="font-mono font-bold text-xs md:text-lg">60</span>
             </div>
         </div>
     </header>
@@ -192,26 +193,29 @@
 
             <!-- Canvas Container -->
             <div id="canvas-container" class="flex-1 relative bg-gray-200/50 flex items-center justify-center overflow-hidden p-2 md:p-4 touch-none min-h-0">
-                 <canvas id="game-canvas" class="bg-white neo-border cursor-crosshair touch-none max-w-full max-h-full block select-none h-full w-full object-contain"></canvas>
+                 <!-- Wrapper for Border & Positioning -->
+                 <div class="relative w-full h-full max-w-full max-h-full neo-border bg-white shadow-none isolate">
+                     <canvas id="game-canvas" class="block w-full h-full cursor-crosshair touch-none select-none outline-none"></canvas>
 
-                 <!-- Game Overlay -->
-                 <div id="overlay" class="absolute inset-0 z-20 hidden flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm transition-opacity p-4">
-                    <div class="neo-border bg-white p-4 md:p-8 rounded-2xl shadow-xl max-w-lg w-full text-center mx-1 md:mx-4 overflow-y-auto max-h-full flex flex-col items-center justify-center min-h-[50%]">
-                        <h2 id="overlay-title" class="text-2xl md:text-4xl font-black mb-1 md:mb-2 text-ink">WAITING</h2>
-                        <h3 id="overlay-subtitle" class="text-base md:text-xl font-bold text-gray-500 mb-3 md:mb-6 hidden">Starting soon...</h3>
-                        <!-- Word Selection -->
-                        <div id="word-selection" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 w-full"></div>
-                        <!-- Start Button -->
-                        <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-2 md:py-4 pl-28 bg-pop-green text-base md:text-xl font-bold rounded-xl hover:bg-green-300 mt-2 md:mt-4 active:scale-95 transition-transform shrink-0">
-                            START GAME 🎮
-                        </button>
-                    </div>
-                 </div>
+                     <!-- Game Overlay -->
+                     <div id="overlay" class="absolute inset-0 z-20 hidden flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm transition-opacity p-4">
+                        <div class="neo-border bg-white p-4 md:p-8 rounded-2xl shadow-xl max-w-lg w-full text-center mx-1 md:mx-4 overflow-y-auto max-h-full flex flex-col items-center justify-center min-h-[50%]">
+                            <h2 id="overlay-title" class="text-2xl md:text-4xl font-black mb-1 md:mb-2 text-ink">WAITING</h2>
+                            <h3 id="overlay-subtitle" class="text-base md:text-xl font-bold text-gray-500 mb-3 md:mb-6 hidden">Starting soon...</h3>
+                            <!-- Word Selection -->
+                            <div id="word-selection" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 w-full"></div>
+                            <!-- Start Button -->
+                            <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-2 md:py-4 pl-28 bg-pop-green text-base md:text-xl font-bold rounded-xl hover:bg-green-300 mt-2 md:mt-4 active:scale-95 transition-transform shrink-0">
+                                START GAME 🎮
+                            </button>
+                        </div>
+                     </div>
 
-                 <!-- Turn Notification -->
-                 <div id="turn-notification" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none opacity-0 transition-opacity duration-500">
-                     <div class="bg-pop-yellow border-2 border-ink px-4 md:px-6 py-2 md:py-3 rounded-full shadow-[4px_4px_0px_#000] text-lg md:text-xl font-black transform rotate-2 whitespace-nowrap">
-                        ✏️ IT'S YOUR TURN!
+                     <!-- Turn Notification -->
+                     <div id="turn-notification" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none opacity-0 transition-opacity duration-500">
+                         <div class="bg-pop-yellow border-2 border-ink px-4 md:px-6 py-2 md:py-3 rounded-full shadow-[4px_4px_0px_#000] text-lg md:text-xl font-black transform rotate-2 whitespace-nowrap">
+                            ✏️ IT'S YOUR TURN!
+                         </div>
                      </div>
                  </div>
             </div>
