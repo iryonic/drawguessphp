@@ -158,19 +158,26 @@ function switchTab(tab) {
             drawView.classList.add('h-full', 'flex-1');
 
             mobilePanel.style.height = '0';
+            mobilePanel.style.flexGrow = '0';
         } else {
             // Split Screen mode
             drawView.classList.remove('h-full', 'flex-1');
-            drawView.classList.add('h-[50vh]'); // Shrink Canvas to 50%
+            drawView.classList.add('h-[40vh]'); // Shrink Canvas to 40% to give chat more room
 
             mobilePanel.classList.remove('h-0');
-            mobilePanel.classList.add('flex-1');
+            mobilePanel.style.height = 'auto';
+            mobilePanel.style.flexGrow = '1';
 
             // Toggle Content
             mobileChat.classList.add('hidden');
             mobileRank.classList.add('hidden');
 
-            if (tab === 'chat') mobileChat.classList.remove('hidden');
+            if (tab === 'chat') {
+                mobileChat.classList.remove('hidden');
+                // Force scroll to bottom when switching to chat
+                const box = document.getElementById('chat-box-mobile');
+                if (box) setTimeout(() => box.scrollTop = box.scrollHeight, 10);
+            }
             if (tab === 'rank') mobileRank.classList.remove('hidden');
         }
         resizeCanvas();

@@ -266,19 +266,22 @@ $base_path = rtrim($scriptDir, '/') . '/';
         </aside>
 
         <!-- Mobile Bottom Panel (Chat/Rank) -->
-        <div id="mobile-panel" class="order-2 lg:hidden h-0 bg-white border-t-[3px] border-ink flex flex-col transition-[height] duration-300 overflow-hidden relative z-20">
+        <div id="mobile-panel" class="order-2 lg:hidden h-0 bg-white border-t-[3px] border-ink flex flex-col transition-[height] duration-300 overflow-hidden relative z-20 shrink-0 basis-0 grow-0">
             <!-- Rank View -->
             <div id="view-rank" class="hidden flex-1 flex-col p-4 overflow-hidden h-full">
                  <h2 class="font-black text-xl mb-3 border-b-2 border-ink pb-2 sticky top-0 bg-white z-10">Leaderboard 🏆</h2>
                  <div id="player-list-mobile" class="space-y-3 overflow-y-auto flex-1 min-h-0"></div>
             </div>
             <!-- Chat View -->
-            <div id="view-chat-mobile" class="hidden flex-1 flex-col overflow-hidden h-full">
-                <div id="chat-box-mobile" class="flex-1 overflow-y-auto p-3 space-y-2 flex flex-col-reverse chat-pattern bg-gray-50 min-h-0"></div>
-                <div class="p-2 border-t-2 border-ink bg-white shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <div id="view-chat-mobile" class="hidden flex flex-col h-full overflow-hidden absolute inset-0 bg-white z-0">
+                <!-- Chat Messages Area -->
+                <div id="chat-box-mobile" class="flex-1 overflow-y-auto p-3 space-y-2 flex flex-col-reverse chat-pattern bg-gray-50 overscroll-contain"></div>
+                
+                <!-- Fixed Input Area -->
+                <div class="p-2 border-t-2 border-ink bg-white shrink-0 z-10 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                      <form onsubmit="sendChatMobile(event)" class="relative flex gap-2">
                         <input type="text" id="chat-input-mobile"
-                            class="flex-1 w-0 border-2 border-gray-300 rounded-lg px-3 py-2 font-bold focus:border-ink focus:outline-none focus:shadow-[2px_2px_0px_#000] text-sm"
+                            class="flex-1 w-0 border-2 border-gray-300 rounded-lg px-3 py-2 font-bold focus:border-ink focus:outline-none focus:shadow-[2px_2px_0px_#000] text-base"
                             placeholder="Guess here..." autocomplete="off">
                         <button type="submit" class="bg-pop-blue border-2 border-ink px-4 py-2 rounded-lg font-bold shadow-[2px_2px_0px_#000] active:shadow-none active:translate-y-1 text-sm shrink-0">SEND</button>
                      </form>
