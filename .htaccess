@@ -1,20 +1,22 @@
 RewriteEngine On
-RewriteBase /drawguess/
 
-# Redirect index.php to root
-RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /drawguess/index\.php\ HTTP/
-RewriteRule ^index\.php$ /drawguess/ [R=301,L]
+# Detect the base directory automatically if possible, or assume root/subfolder based on request
+# But for simplicity and robustness in XAMPP vs Production, let's use a standard pattern:
 
-# Clean Room URLs: /room/CODE -> game.php?code=CODE
+# 1. Clean Room URLs: /room/CODE -> game.php?room=CODE
 RewriteRule ^room/([A-Za-z0-9]+)/?$ game.php?room=$1 [QSA,L]
 
-# Admin URLs
+# 2. Admin URLs
 RewriteRule ^admin/?$ admin/index.php [L]
 RewriteRule ^admin/words/?$ admin/words.php [L]
 RewriteRule ^admin/avatars/?$ admin/avatars.php [L]
 RewriteRule ^admin/music/?$ admin/music.php [L]
 
-# API and Assets should be left alone
+# 3. Handle index.php cleaning (Optional but good for SEO)
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /.*index\.php\ HTTP/
+RewriteRule ^(.*)index\.php$ $1 [R=301,L]
+
+# 4. Fallback for non-existent files to index.php (Enables SPA-like routing)
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule . /drawguess/index.php [L]
+RewriteRule . index.php [L]

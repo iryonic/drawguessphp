@@ -1,9 +1,9 @@
 const CACHE_NAME = 'draw-guess-v1';
 const ASSETS = [
-    '/drawguess/',
-    '/drawguess/index.php',
-    '/drawguess/manifest.json',
-    '/drawguess/assets/pwa/icon-512.png'
+    './',
+    'index.php',
+    'manifest.json',
+    'assets/pwa/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -13,7 +13,6 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
-    // Strategy: Network first, then cache
     event.respondWith(
         fetch(event.request).catch(() => caches.match(event.request))
     );

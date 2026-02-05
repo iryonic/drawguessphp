@@ -114,7 +114,7 @@ if (mysqli_num_rows($tbl_check) == 0) {
         round_id INT,
         player_id INT,
         message VARCHAR(255),
-        type ENUM('chat', 'guess', 'system') DEFAULT 'chat',
+        type ENUM('chat', 'guess', 'system', 'reaction') DEFAULT 'chat',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
     )");

@@ -1,5 +1,5 @@
 const player = JSON.parse(localStorage.getItem('dg_player') || '{}');
-if (!player.token) window.location.href = 'index.php';
+if (!player.token) window.location.href = APP_ROOT || './';
 
 const roomCodeDisplay = document.getElementById('room-code-display');
 const playerList = document.getElementById('player-list');
@@ -175,7 +175,10 @@ function switchTab(tab) {
         }
         resizeCanvas();
     }
+    resizeCanvas();
 }
+
+window.switchTab = switchTab;
 
 function updateLocalTimer() {
     // If not in a state with a timer, clear timer visual
@@ -849,6 +852,9 @@ async function submitChat(msg) {
     syncChat();
 }
 
+window.sendChat = sendChat;
+window.sendChatMobile = sendChatMobile;
+
 async function sendReaction(emoji) {
     // Optimistic local feedback sound
     try { sfx.play('pop'); } catch (e) { }
@@ -937,5 +943,5 @@ async function leaveRoom() {
     } catch (e) { }
 
     localStorage.removeItem('dg_player');
-    window.location.href = '/drawguess/';
+    window.location.href = APP_ROOT;
 }

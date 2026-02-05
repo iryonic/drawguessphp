@@ -5,7 +5,7 @@ let avatars = [];
 // Init Avatars
 async function loadAvatars() {
     try {
-        const res = await (await fetch('api/avatars.php')).json();
+        const res = await (await fetch(APP_ROOT + 'api/avatars.php')).json();
         console.log("Avatars Loaded:", res);
 
         if (res.success && res.data && Array.isArray(res.data) && res.data.length > 0) {
@@ -55,7 +55,7 @@ loadAvatars();
 
 async function apiRequest(endpoint, data) {
     try {
-        const res = await fetch(`api/${endpoint}`, {
+        const res = await fetch(APP_ROOT + `api/${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams(data)
@@ -91,7 +91,7 @@ async function confirmCreateRoom() {
     if (res.success) {
         sfx.play('start');
         localStorage.setItem('dg_player', JSON.stringify(res.data));
-        window.location.href = 'room/' + res.data.room_code;
+        window.location.href = APP_ROOT + 'room/' + res.data.room_code;
     } else {
         showError(res.error || 'Failed to create room');
     }
@@ -120,7 +120,7 @@ async function joinRoom() {
     if (res.success) {
         sfx.play('start');
         localStorage.setItem('dg_player', JSON.stringify(res.data));
-        window.location.href = 'room/' + res.data.room_code;
+        window.location.href = APP_ROOT + 'room/' + res.data.room_code;
     } else {
         showError(res.error || 'Failed to join room');
     }

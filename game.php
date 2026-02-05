@@ -1,4 +1,9 @@
-<!DOCTYPE html>
+<?php
+// Determine the dynamic base path securely
+$scriptDir = dirname($_SERVER['SCRIPT_NAME']);
+$scriptDir = str_replace('\\', '/', $scriptDir); // Normalize Windows paths
+$base_path = rtrim($scriptDir, '/') . '/';
+?><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,11 +11,12 @@
     <title>Draw & Guess - In Game</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="<?= $base_path ?>manifest.json">
     <meta name="theme-color" content="#facc15">
     <script>
+        const APP_ROOT = '<?= $base_path ?>';
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
+            navigator.serviceWorker.register('<?= $base_path ?>sw.js').catch(() => {});
         }
     </script>
     <script>
@@ -260,28 +266,28 @@
         </aside>
 
         <!-- Mobile Bottom Panel (Chat/Rank) -->
-        <div id="mobile-panel" class="order-2 lg:hidden h-0 bg-white border-t-[3px] border-ink flex flex-col transition-[height] duration-300 overflow-hidden">
+        <div id="mobile-panel" class="order-2 lg:hidden h-0 bg-white border-t-[3px] border-ink flex flex-col transition-[height] duration-300 overflow-hidden relative z-20">
             <!-- Rank View -->
-            <div id="view-rank" class="hidden flex-1 flex-col p-4 overflow-hidden">
+            <div id="view-rank" class="hidden flex-1 flex-col p-4 overflow-hidden h-full">
                  <h2 class="font-black text-xl mb-3 border-b-2 border-ink pb-2 sticky top-0 bg-white z-10">Leaderboard 🏆</h2>
-                 <div id="player-list-mobile" class="space-y-3 overflow-y-auto flex-1"></div>
+                 <div id="player-list-mobile" class="space-y-3 overflow-y-auto flex-1 min-h-0"></div>
             </div>
             <!-- Chat View -->
-            <div id="view-chat-mobile" class="hidden flex-1 flex-col overflow-hidden">
-                <div id="chat-box-mobile" class="flex-1 overflow-y-auto p-3 space-y-2 flex flex-col-reverse chat-pattern bg-gray-50"></div>
-                <div class="p-2 border-t-2 border-ink bg-white shrink-0 pb-safe">
+            <div id="view-chat-mobile" class="hidden flex-1 flex-col overflow-hidden h-full">
+                <div id="chat-box-mobile" class="flex-1 overflow-y-auto p-3 space-y-2 flex flex-col-reverse chat-pattern bg-gray-50 min-h-0"></div>
+                <div class="p-2 border-t-2 border-ink bg-white shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                      <form onsubmit="sendChatMobile(event)" class="relative flex gap-2">
                         <input type="text" id="chat-input-mobile"
-                            class="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 font-bold focus:border-ink focus:outline-none focus:shadow-[2px_2px_0px_#000] text-sm"
+                            class="flex-1 w-0 border-2 border-gray-300 rounded-lg px-3 py-2 font-bold focus:border-ink focus:outline-none focus:shadow-[2px_2px_0px_#000] text-sm"
                             placeholder="Guess here..." autocomplete="off">
-                        <button type="submit" class="bg-pop-blue border-2 border-ink px-4 py-2 rounded-lg font-bold shadow-[2px_2px_0px_#000] active:shadow-none active:translate-y-1 text-sm">SEND</button>
+                        <button type="submit" class="bg-pop-blue border-2 border-ink px-4 py-2 rounded-lg font-bold shadow-[2px_2px_0px_#000] active:shadow-none active:translate-y-1 text-sm shrink-0">SEND</button>
                      </form>
                 </div>
             </div>
         </div>
 
         <!-- Mobile Bottom Nav -->
-        <nav class="order-3 lg:hidden h-14 bg-white border-t-[3px] border-ink flex items-stretch shrink-0 z-30 relative shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+        <nav class="order-3 lg:hidden h-14 bg-white border-t-[3px] border-ink flex items-stretch shrink-0 z-40 relative shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
             <button onclick="switchTab('rank')" id="tab-rank" class="flex-1 flex flex-col items-center justify-center gap-0.5 text-gray-400 hover:bg-gray-50 transition active:bg-gray-100">
                 <span class="text-lg grayscale opacity-50">🏆</span>
                 <span class="text-[9px] font-bold uppercase tracking-wider">Rank</span>
@@ -302,8 +308,8 @@
     <!-- Confetti Library -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
-    <script src="js/sounds.js"></script>
-    <script src="js/game.js"></script>
+    <script src="<?= $base_path ?>js/sounds.js"></script>
+    <script src="<?= $base_path ?>js/game.js"></script>
     <script>
         // Sync Logic for Mobile Views managed here to keep game.js clean(er)
         window.addEventListener('resize', () => {

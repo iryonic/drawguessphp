@@ -1,3 +1,9 @@
+<?php
+// Determine the dynamic base path securely
+$scriptDir = dirname($_SERVER['SCRIPT_NAME']);
+$scriptDir = str_replace('\\', '/', $scriptDir); // Normalize Windows paths
+$base_path = rtrim($scriptDir, '/') . '/';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,6 +15,7 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#facc15">
     <script>
+        const APP_ROOT = '<?= $base_path ?>';
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').catch(() => {});
         }
@@ -278,8 +285,8 @@
         </div>
     </div>
 
-    <script src="js/sounds.js"></script>
-    <script src="js/lobby.js"></script>
+    <script src="<?= $base_path ?>js/sounds.js"></script>
+    <script src="<?= $base_path ?>js/lobby.js"></script>
     <script>
         // --- Modal & UI Logic ---
         const modal = document.getElementById('create-modal');
