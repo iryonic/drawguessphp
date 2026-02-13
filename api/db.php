@@ -59,6 +59,30 @@ if (mysqli_num_rows($tbl_check) == 0) {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
     
+    // Avatars
+    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS avatars (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        emoji VARCHAR(10) NOT NULL UNIQUE
+    )");
+
+    // Seed Avatars
+    mysqli_query($conn, "INSERT IGNORE INTO avatars (emoji) VALUES ('🐱'), ('🐶'), ('🦁'), ('🦊'), ('🐸'), ('🐼'), ('🐨'), ('🐷'), ('🐵'), ('🦄'), ('🐙'), ('🐯')");
+
+    // Admins
+    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS admins (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+    
+    // Seed default admin if none exists
+    $check_admin = mysqli_query($conn, "SELECT id FROM admins");
+    if (mysqli_num_rows($check_admin) == 0) {
+        $default_pass = password_hash('admin123', PASSWORD_DEFAULT);
+        mysqli_query($conn, "INSERT INTO admins (username, password_hash) VALUES ('admin', '$default_pass')");
+    }
+
     // Players
     mysqli_query($conn, "CREATE TABLE IF NOT EXISTS players (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -67,6 +91,7 @@ if (mysqli_num_rows($tbl_check) == 0) {
         avatar VARCHAR(255),
         score INT DEFAULT 0,
         is_host BOOLEAN DEFAULT FALSE,
+        turn_order INT DEFAULT 0,
         last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         session_token VARCHAR(64) NOT NULL,
         FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
@@ -87,9 +112,11 @@ if (mysqli_num_rows($tbl_check) == 0) {
         round_number INT NOT NULL,
         drawer_id INT,
         word_id INT,
+        word_options VARCHAR(255),
+        hints_mask VARCHAR(255),
         start_time TIMESTAMP NULL,
         end_time TIMESTAMP NULL,
-        status ENUM('choosing', 'drawing', 'ended') DEFAULT 'choosing',
+        status ENUM('choosing', 'countdown', 'drawing', 'ended', 'game_over') DEFAULT 'choosing',
         FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
         FOREIGN KEY (drawer_id) REFERENCES players(id) ON DELETE SET NULL,
         FOREIGN KEY (word_id) REFERENCES words(id)
@@ -105,7 +132,7 @@ if (mysqli_num_rows($tbl_check) == 0) {
         sequence_id INT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
-    )"); // Changed TEXT to MEDIUMTEXT for safety
+    )");
 
     // Messages
     mysqli_query($conn, "CREATE TABLE IF NOT EXISTS messages (

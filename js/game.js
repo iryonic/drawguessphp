@@ -56,10 +56,11 @@ let strokeHistory = [];
 
 // Local Timer
 let timerInterval = null;
+let lastSendTime = 0; // Throttling helper for drawing mid-stroke
 
 // Init
 if (roomCodeDisplay) roomCodeDisplay.innerText = player.room_code || '????';
-resizeCanvas();
+// resizeCanvas() called after declaration now
 
 // Default to Chat on Mobile
 if (window.innerWidth < 1024) {
@@ -69,12 +70,30 @@ if (window.innerWidth < 1024) {
 // Window Resize Handling
 window.addEventListener('resize', resizeCanvas);
 
+// Debounce resize to prevent storming
+var resizeTimeout;
+// Constants for layout
+const MOBILE_BREAKPOINT = 1024;
+const DEFAULT_MOBILE_PANEL_H = '50svh';
+
 function resizeCanvas() {
-    const rect = canvas.getBoundingClientRect();
-    // Round to avoid sub-pixel rendering issues which can cause drift
-    canvas.width = Math.floor(rect.width);
-    canvas.height = Math.floor(rect.height);
+    const container = document.getElementById('canvas-container');
+    if (!container) return;
+
+    // Set internal resolution match display size
+    const wrapper = container.querySelector('.neo-border');
+    if (!wrapper) return;
+
+    canvas.width = wrapper.clientWidth;
+    canvas.height = wrapper.clientHeight;
+
+    // Invalidate drawing history to force a full re-fetch/redraw
+    gameState.lastStrokeId = 0;
+    syncDraw();
 }
+
+// Init canvas size immediately
+if (canvas) setTimeout(resizeCanvas, 300);
 
 // ... (lines 80-211 skipped) ...
 
@@ -280,9 +299,19 @@ function drawLine(nx1, ny1, nx2, ny2, color, size) {
 function draw(e) {
     if (!painting || !gameState.myTurn) return;
     const pos = getNormalizedPos(e);
+
+    // Local Draw
     drawLine(lastPos.x, lastPos.y, pos.x, pos.y, gameState.color, gameState.size);
+
     lastPos = pos;
     pointsBuffer.push(pos);
+
+    // Throttle: Send partial stroke if buffer is large enough OR 250ms passed
+    const now = Date.now();
+    if (pointsBuffer.length > 20 || (now - lastSendTime > 250)) {
+        sendStrokes();
+        lastSendTime = now;
+    }
 }
 
 function endDraw() {
@@ -314,7 +343,7 @@ async function sendStrokes() {
         pointsBuffer = [];
     }
 
-    await fetch('api/draw_sync.php', {
+    await fetch(`${APP_ROOT}api/draw_sync.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams(data)
@@ -324,7 +353,7 @@ async function sendStrokes() {
 
 async function syncState() {
     try {
-        const response = await fetch('api/game_state.php', {
+        const response = await fetch(`${APP_ROOT}api/game_state.php`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ token: player.token, action: 'sync' })
@@ -334,7 +363,7 @@ async function syncState() {
         // Handle Session Error
         if (res.error === 'Invalid Session') {
             alert('Session expired. Redirecting to home.');
-            window.location.href = 'index.php';
+            window.location.href = APP_ROOT + 'index.php';
             return;
         }
 
@@ -423,10 +452,11 @@ async function syncState() {
         }
 
         // Overlays
-        const overlayTitle = document.getElementById('overlay-title');
-        const overlaySubtitle = document.getElementById('overlay-subtitle');
-        const wordSelect = document.getElementById('word-selection');
-        const startBtn = document.getElementById('start-btn');
+        // Redundant declarations removed to avoid TDZ errors
+        // const overlayTitle = document.getElementById('overlay-title');
+        // const overlaySubtitle = document.getElementById('overlay-subtitle');
+        // const wordSelect = document.getElementById('word-selection');
+        // const startBtn = document.getElementById('start-btn');
 
         if (gameState.status === 'lobby') {
             if (overlay) overlay.classList.remove('hidden');
@@ -552,7 +582,11 @@ async function syncState() {
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
-    } catch (e) { console.error("SyncState Error:", e); }
+    } catch (e) {
+        console.error("SyncState Error:", e);
+        console.log("Attempted URL:", APP_ROOT + 'api/game_state.php');
+        if (typeof response !== 'undefined') console.log("Response Status:", response.status);
+    }
 }
 
 function showTurnNotification() {
@@ -597,7 +631,7 @@ function updatePlayers(players, drawerId) {
 
 async function selectWord(wid) {
     try { sfx.play('pop'); } catch (e) { }
-    await fetch('api/game_state.php', {
+    await fetch(`${APP_ROOT}api/game_state.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'select_word', word_id: wid })
@@ -606,7 +640,7 @@ async function selectWord(wid) {
 
 async function startGame() {
     try { sfx.play('pop'); } catch (e) { }
-    await fetch('api/game_state.php', {
+    await fetch(`${APP_ROOT}api/game_state.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'start_game' })
@@ -706,7 +740,7 @@ async function syncDraw() {
     if (gameState.status !== 'drawing' && gameState.status !== 'ended') return;
 
     try {
-        const res = await (await fetch(`api/draw_sync.php?token=${player.token}&action=fetch&last_id=${gameState.lastStrokeId}`)).json();
+        const res = await (await fetch(`${APP_ROOT}api/draw_sync.php?token=${player.token}&action=fetch&last_id=${gameState.lastStrokeId}`)).json();
         if (res.data && res.data.strokes) {
             // Sort just in case DB doesn't ensure order (id usually does)
             res.data.strokes.sort((a, b) => a.id - b.id);
@@ -723,7 +757,7 @@ async function syncDraw() {
 
 async function syncChat() {
     try {
-        const res = await (await fetch(`api/chat.php?token=${player.token}&action=fetch&last_id=${gameState.lastMsgId}`)).json();
+        const res = await (await fetch(`${APP_ROOT}api/chat.php?token=${player.token}&action=fetch&last_id=${gameState.lastMsgId}`)).json();
         if (res.data && res.data.messages) {
             res.data.messages.forEach(m => {
                 if (m.id > gameState.lastMsgId) gameState.lastMsgId = m.id;
@@ -773,50 +807,117 @@ async function syncChat() {
                 });
 
                 // MOBILE TOASTS: Floating chat over canvas
-                if (window.innerWidth < 1024) {
-                    const toastContainer = document.getElementById('canvas-toasts');
-                    if (toastContainer) {
-                        const toast = document.createElement('div');
-
-                        if (m.type === 'guess' || m.type === 'system') {
-                            toast.className = "backdrop-blur border-2 border-ink px-4 py-2 rounded-xl shadow-[4px_4px_0px_rgba(0,0,0,1)] text-xs font-black transition-all transform translate-y-2 opacity-0";
-                            if (m.type === 'guess') {
-                                toast.classList.add('bg-pop-green', 'text-black');
-                                toast.innerHTML = `🎉 ${username} guessed correctly!`;
-                            } else {
-                                toast.classList.add('bg-pop-yellow', 'text-black');
-                                toast.innerHTML = `${username} ${m.message}`;
-                            }
-                        }
-                        else {
-                            toast.className = "bg-white/90 backdrop-blur border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm text-xs flex gap-1 transition-all transform translate-y-2 opacity-0";
-                            toast.innerHTML = `<span class="font-black text-ink uppercase tracking-wide">${username}:</span> <span class="text-gray-800">${m.message}</span>`;
-                        }
-
-                        toastContainer.appendChild(toast);
-
-                        // Animate In
-                        requestAnimationFrame(() => {
-                            toast.classList.remove('translate-y-2', 'opacity-0');
-                        });
-
-                        // Remove after 4s
-                        setTimeout(() => {
-                            toast.classList.add('opacity-0', '-translate-x-4');
-                            setTimeout(() => toast.remove(), 300);
-                        }, 4000);
-
-                        // Limit to 4 toasts
-                        if (toastContainer.children.length > 4) {
-                            toastContainer.removeChild(toastContainer.firstChild);
-                        }
-                    }
+                if (window.innerWidth < MOBILE_BREAKPOINT && currentTab !== 'chat') {
+                    showToast(m);
                 }
             });
             updatePersist();
         }
     } catch (e) { }
 }
+
+let currentTab = (window.innerWidth < 1024) ? 'chat' : 'draw';
+
+function showToast(m) {
+    const toastContainer = document.getElementById('canvas-toasts');
+    if (!toastContainer) return;
+
+    const toast = document.createElement('div');
+    const username = m.username || 'System';
+
+    if (m.type === 'guess' || m.type === 'system') {
+        toast.className = "backdrop-blur border-2 border-ink px-4 py-2 rounded-xl shadow-[4px_4px_0px_rgba(0,0,0,1)] text-xs font-black transition-all transform translate-y-2 opacity-0";
+        if (m.type === 'guess') {
+            toast.classList.add('bg-pop-green', 'text-black');
+            toast.innerHTML = `🎉 ${username} guessed correctly!`;
+        } else {
+            toast.classList.add('bg-pop-yellow', 'text-black');
+            toast.innerHTML = `${username} ${m.message}`;
+        }
+    }
+    else {
+        toast.className = "bg-white/95 backdrop-blur border-2 border-ink px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_#000] text-xs flex gap-1 transition-all transform translate-y-2 opacity-0";
+        toast.innerHTML = `<span class="font-black text-ink uppercase tracking-wide shrink-0">${username}:</span> <span class="text-gray-800 truncate">${m.message}</span>`;
+    }
+
+    toastContainer.appendChild(toast);
+
+    // Animate In
+    requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+    });
+
+    // Remove after 4s
+    setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-x-4');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+
+    // Limit to 3 toasts on canvas
+    while (toastContainer.children.length > 3) {
+        toastContainer.removeChild(toastContainer.firstChild);
+    }
+}
+
+function switchTab(tab) {
+    if (window.innerWidth >= MOBILE_BREAKPOINT) return;
+    currentTab = tab;
+
+    const viewRank = document.getElementById('view-rank');
+    const viewChat = document.getElementById('view-chat-mobile');
+    const tabs = {
+        rank: document.getElementById('tab-rank'),
+        draw: document.getElementById('tab-draw'),
+        chat: document.getElementById('tab-chat')
+    };
+
+    // Reset styles
+    Object.keys(tabs).forEach(k => {
+        const t = tabs[k];
+        if (!t) return;
+        t.classList.remove('bg-pop-yellow/10', 'text-ink');
+        t.classList.add('text-gray-400');
+        const icon = t.querySelector('span:first-child');
+        if (icon) icon.classList.add('grayscale', 'opacity-50');
+    });
+
+    // Set active tab
+    const activeTab = tabs[tab];
+    if (activeTab) {
+        activeTab.classList.remove('text-gray-400');
+        activeTab.classList.add('bg-pop-yellow/10', 'text-ink');
+        const icon = activeTab.querySelector('span:first-child');
+        if (icon) icon.classList.remove('grayscale', 'opacity-50');
+    }
+
+    // Handle Views
+    if (tab === 'draw') {
+        document.documentElement.style.setProperty('--mobile-panel-h', '0px');
+        viewRank.classList.add('hidden');
+        viewChat.classList.add('hidden');
+    } else {
+        document.documentElement.style.setProperty('--mobile-panel-h', DEFAULT_MOBILE_PANEL_H);
+        if (tab === 'rank') {
+            viewRank.classList.remove('hidden');
+            viewRank.classList.add('flex');
+            viewChat.classList.add('hidden');
+        } else if (tab === 'chat') {
+            viewRank.classList.add('hidden');
+            viewChat.classList.remove('hidden');
+            viewChat.classList.add('flex');
+            // Scroll chat to bottom with delay
+            setTimeout(() => {
+                const box = document.getElementById('chat-box-mobile');
+                if (box) box.scrollTop = box.scrollHeight;
+            }, 50);
+        }
+    }
+
+    // Important: resize canvas after layout shift
+    setTimeout(resizeCanvas, 310);
+}
+
+window.switchTab = switchTab;
 
 async function sendChat(e) {
     if (e) e.preventDefault();
@@ -851,7 +952,7 @@ async function sendChatMobile(e) {
 }
 
 async function submitChat(msg) {
-    await fetch('api/chat.php', {
+    await fetch(`${APP_ROOT}api/chat.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'send', message: msg })
@@ -865,7 +966,7 @@ window.sendChatMobile = sendChatMobile;
 async function sendReaction(emoji) {
     // Optimistic local feedback sound
     try { sfx.play('pop'); } catch (e) { }
-    await fetch('api/chat.php', {
+    await fetch(`${APP_ROOT}api/chat.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'reaction', emoji: emoji })
@@ -912,7 +1013,7 @@ function clearCanvasAction() {
     try { sfx.play('pop'); } catch (e) { }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     strokeHistory = [];
-    fetch('api/draw_sync.php', {
+    fetch(`${APP_ROOT}api/draw_sync.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'clear' })
@@ -931,7 +1032,7 @@ function undoAction() {
         else drawLine(oldS.x1, oldS.y1, oldS.x2, oldS.y2, oldS.color, oldS.size);
     });
 
-    fetch('api/draw_sync.php', {
+    fetch(`${APP_ROOT}api/draw_sync.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'undo' })
@@ -942,7 +1043,7 @@ async function leaveRoom() {
     if (!confirm('Are you sure you want to leave the game?')) return;
 
     try {
-        await fetch('api/rooms.php', {
+        await fetch(`${APP_ROOT}api/rooms.php`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ token: player.token, action: 'leave' })

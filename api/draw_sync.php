@@ -2,7 +2,7 @@
 require_once 'db.php';
 
 // Auth
-$token = $_POST['token'] ?? $_GET['token'] ?? '';
+$token = sanitize($conn, $_POST['token'] ?? $_GET['token'] ?? '');
 $player_q = mysqli_query($conn, "SELECT id, room_id FROM players WHERE session_token = '$token'");
 
 if (mysqli_num_rows($player_q) === 0) {

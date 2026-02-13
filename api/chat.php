@@ -36,18 +36,23 @@ if ($action === 'send') {
     if ($round && $round['status'] === 'drawing') {
         if (strcasecmp(trim($msg), $current_word) === 0) {
             // Check if already guessed
-             $chk = mysqli_query($conn, "SELECT id FROM messages WHERE round_id = {$round['id']} AND player_id = {$player['id']} AND type = 'guess'");
-             if (mysqli_num_rows($chk) > 0) {
+             $chk_q = mysqli_query($conn, "SELECT id FROM messages WHERE round_id = {$round['id']} AND player_id = {$player['id']} AND type = 'guess'");
+             if (mysqli_num_rows($chk_q) > 0) {
                   jsonResponse(['success' => true]); // Ignore duplicate
              }
              
-             // SCORING (Low Intensity: Max ~50 per round)
+             // Calculate Rank (how many have already guessed)
+             $rank_q = mysqli_query($conn, "SELECT COUNT(*) as c FROM messages WHERE round_id = {$round['id']} AND type = 'guess'");
+             $rank = intval(mysqli_fetch_assoc($rank_q)['c']);
+             
+             // SCORING
              $rank_bonus = ($rank == 0) ? 10 : (($rank == 1) ? 5 : (($rank == 2) ? 2 : 0));
              
-             // Time & Duration
-             $room_s_q = mysqli_query($conn, "SELECT round_duration FROM rooms WHERE id = $room_id");
-             $dur = intval(mysqli_fetch_assoc($room_s_q)['round_duration'] ?? 60);
-             $elapsed = time() - strtotime($round['start_time']);
+             // Time & Duration (Using SQL for consistency)
+             $time_q = mysqli_query($conn, "SELECT round_duration, TIMESTAMPDIFF(SECOND, start_time, NOW()) as elapsed FROM rounds r JOIN rooms rm ON r.room_id = rm.id WHERE r.id = {$round['id']}");
+             $time_info = mysqli_fetch_assoc($time_q);
+             $dur = intval($time_info['round_duration'] ?? 60);
+             $elapsed = intval($time_info['elapsed'] ?? 0);
              $time_left = max(0, $dur - $elapsed);
              
              // Hint Penalty
@@ -58,23 +63,24 @@ if ($action === 'send') {
              
              // Formula: Max 40 (time) + 10 (rank) - penalty
              $score = ceil(40 * ($time_left / $dur)) + $rank_bonus - ($hints * 5);
-             $score = max(1, $score);
+             $score = max(5, $score); // Minimum 5 points for correct guess
              
              // Update Guesser
              mysqli_query($conn, "UPDATE players SET score = score + $score WHERE id = {$player['id']}");
              
-             // Removed Drawer update here to prevent double-counting (handled in game_state.php)
-             
              // Log Guess (type=guess)
-             mysqli_query($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES ($room_id, {$round['id']}, {$player['id']}, 'guessed the word correctly!', 'guess')");
+             $stmt = mysqli_prepare($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES (?, ?, ?, ?, 'guess')");
+             $guess_msg = "guessed the word correctly!";
+             mysqli_stmt_bind_param($stmt, "iiis", $room_id, $round['id'], $player['id'], $guess_msg);
+             mysqli_stmt_execute($stmt);
              
              // Check End Round (All guessed?)
              $p_q = mysqli_query($conn, "SELECT COUNT(*) as c FROM players WHERE room_id = $room_id AND id != {$round['drawer_id']}");
-             $total_guessers = intval(mysqli_fetch_assoc($p_q)['c']);
+             $total_possible_guessers = intval(mysqli_fetch_assoc($p_q)['c']);
              $guessed_now = $rank + 1;
              
-             if ($guessed_now >= $total_guessers) {
-                  mysqli_query($conn, "UPDATE rounds SET status = 'ended' WHERE id = {$round['id']}");
+             if ($guessed_now >= $total_possible_guessers) {
+                  mysqli_query($conn, "UPDATE rounds SET status = 'ended', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 10 SECOND) WHERE id = {$round['id']}");
              }
              
              jsonResponse(['success' => true]);
@@ -83,13 +89,18 @@ if ($action === 'send') {
         // Bonus: "Close!" check (if off by 1-2 chars)
         $dist = levenshtein(strtolower(trim($msg)), strtolower($current_word));
         if ($dist <= 2 && $dist > 0 && strlen($current_word) > 3) {
-            mysqli_query($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES ($room_id, {$round['id']}, {$player['id']}, 'is so close!', 'system')");
+            $stmt = mysqli_prepare($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES (?, ?, ?, 'is so close!', 'system')");
+            mysqli_stmt_bind_param($stmt, "iii", $room_id, $round['id'], $player['id']);
+            mysqli_stmt_execute($stmt);
         }
     }
     
     // Normal chat
-    $sql = "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES ($room_id, " . ($round ? $round['id'] : 'NULL') . ", {$player['id']}, '$msg', '$type')";
-    mysqli_query($conn, $sql);
+    $stmt = mysqli_prepare($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES (?, ?, ?, ?, ?)");
+    $round_id_val = $round ? $round['id'] : null;
+    mysqli_stmt_bind_param($stmt, "iiiss", $room_id, $round_id_val, $player['id'], $msg, $type);
+    mysqli_stmt_execute($stmt);
+    
     jsonResponse(['success' => true]);
 }
 

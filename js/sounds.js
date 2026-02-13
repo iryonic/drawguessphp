@@ -25,7 +25,7 @@ class SoundManager {
 
     async loadConfig() {
         try {
-            const res = await (await fetch('api/settings.php')).json();
+            const res = await (await fetch(APP_ROOT + 'api/settings.php')).json();
             if (res.success) {
                 this.config = res.settings;
                 this.bgmEnabled = this.config.lobby_music_enabled === '1';
@@ -34,6 +34,7 @@ class SoundManager {
     }
 
     init() {
+        if (this.unlocked) return; // Already unlocked, skip
         if (!this.ctx) {
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -41,6 +42,7 @@ class SoundManager {
             } catch (e) { return; }
         }
         if (this.ctx.state === 'suspended') {
+            // Only try to resume; don't force it or log errors if it fails due to lack of user gesture
             this.ctx.resume().catch(() => { });
         }
     }

@@ -2,7 +2,7 @@
 require_once 'db.php';
 
 // Auth check
-$token = $_POST['token'] ?? '';
+$token = sanitize($conn, $_POST['token'] ?? '');
 $player_q = mysqli_query($conn, "SELECT * FROM players WHERE session_token = '$token'");
 if (mysqli_num_rows($player_q) === 0) {
     jsonResponse(['error' => 'Invalid Session'], false);
@@ -15,222 +15,170 @@ $is_host = $player['is_host'];
 // Update Last Active
 mysqli_query($conn, "UPDATE players SET last_active = NOW() WHERE id = $player_id");
 
-// --- CLEANUP INACTIVE PLAYERS ---
+// --- FETCH CONTEXT ---
+$room_res = mysqli_query($conn, "SELECT * FROM rooms WHERE id = $room_id");
+$room = mysqli_fetch_assoc($room_res);
+
 // Threshold: 30 seconds of silence
 $inactivity_limit = 30;
-$inactive_p_res = mysqli_query($conn, "SELECT id, username, is_host FROM players WHERE room_id = $room_id AND id != $player_id AND last_active < DATE_SUB(NOW(), INTERVAL $inactivity_limit SECOND)");
+$now_sql = "NOW()";
+
+// 1. CLEANUP INACTIVE PLAYERS
+$inactive_p_res = mysqli_query($conn, "SELECT id, username, is_host FROM players WHERE room_id = $room_id AND id != $player_id AND last_active < DATE_SUB($now_sql, INTERVAL $inactivity_limit SECOND)");
 
 while ($dead_p = mysqli_fetch_assoc($inactive_p_res)) {
     $dead_id = $dead_p['id'];
-    $dead_name = $dead_p['username'];
-    
-    // Delete disconnected player
+    $dead_name = mysqli_real_escape_string($conn, $dead_p['username']);
     mysqli_query($conn, "DELETE FROM players WHERE id = $dead_id");
-    
-    // Log in chat
-    $clean_name = mysqli_real_escape_string($conn, $dead_name);
-    mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($room_id, 0, '$clean_name left the room', 'system')");
+    mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($room_id, 0, '$dead_name left the room', 'system')");
 }
 
 // Ensure Host Exists
-$host_check = mysqli_query($conn, "SELECT id FROM players WHERE room_id = $room_id AND is_host = 1");
-if (mysqli_num_rows($host_check) === 0) {
-    // Current player or first in list becomes host
+if (!$room['host_id'] || mysqli_num_rows(mysqli_query($conn, "SELECT id FROM players WHERE id = {$room['host_id']}")) === 0) {
     $new_host_res = mysqli_query($conn, "SELECT id, username FROM players WHERE room_id = $room_id ORDER BY id ASC LIMIT 1");
     if ($new_host = mysqli_fetch_assoc($new_host_res)) {
         $new_host_id = $new_host['id'];
         mysqli_query($conn, "UPDATE players SET is_host = 1 WHERE id = $new_host_id");
         mysqli_query($conn, "UPDATE rooms SET host_id = $new_host_id WHERE id = $room_id");
-        
         $h_name = mysqli_real_escape_string($conn, $new_host['username']);
         mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($room_id, 0, '$h_name is now the host', 'system')");
-        
-        // Update local flag if it was the current player
-        if ($new_host_id == $player_id) {
-            $is_host = 1;
-        }
+        if ($new_host_id == $player_id) $is_host = 1;
+        // Refresh room data
+        $room['host_id'] = $new_host_id;
     }
 }
 
 $action = $_POST['action'] ?? 'sync';
-
+// ... (Game Actions logic kept same) ...
 if ($action === 'start_game' && $is_host) {
-    $r_chk = mysqli_query($conn, "SELECT status FROM rooms WHERE id = $room_id");
-    $r_row = mysqli_fetch_assoc($r_chk);
-    
-    if ($r_row['status'] === 'lobby' || $r_row['status'] === 'finished') {
-        // Init Game: Shuffle Orders
+    if ($room['status'] === 'lobby' || $room['status'] === 'finished') {
         $pq = mysqli_query($conn, "SELECT id FROM players WHERE room_id = $room_id");
         $p_ids = [];
         while($p = mysqli_fetch_assoc($pq)) $p_ids[] = $p['id'];
-        
         shuffle($p_ids);
         foreach($p_ids as $idx => $pid) {
             mysqli_query($conn, "UPDATE players SET turn_order = $idx, score = 0 WHERE id = $pid");
         }
-        
-        // Reset Room
         mysqli_query($conn, "UPDATE rooms SET status = 'playing', current_round = 1 WHERE id = $room_id");
-        mysqli_query($conn, "DELETE FROM rounds WHERE room_id = $room_id"); // Clear old history
-        
+        mysqli_query($conn, "DELETE FROM rounds WHERE room_id = $room_id");
         startNextTurn($conn, $room_id);
         jsonResponse(['success' => true]);
     }
-}
-
-if ($action === 'next_turn' && $is_host) {
-     //$round_duration = 5; // Intermission?
-     // Just start next turn immediately if requested
-     startNextTurn($conn, $room_id);
-     jsonResponse(['success' => true]);
 }
 
 if ($action === 'select_word') {
     $word_id = intval($_POST['word_id']);
     $round_q = mysqli_query($conn, "SELECT * FROM rounds WHERE room_id = $room_id ORDER BY id DESC LIMIT 1");
     $round = mysqli_fetch_assoc($round_q);
-    
-    if ($round['drawer_id'] == $player_id && $round['status'] == 'choosing') { 
-        // Start Countdown (3s)
+    if ($round && $round['drawer_id'] == $player_id && $round['status'] == 'choosing') { 
         mysqli_query($conn, "UPDATE rounds SET word_id = $word_id, status = 'countdown', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 3 SECOND) WHERE id = {$round['id']}");
         jsonResponse(['success' => true]);
     }
 }
 
-// --- STATE MACHINE (Hints & Timeouts) ---
+// --- STATE MACHINE ---
 $round_q = mysqli_query($conn, "SELECT *, TIMESTAMPDIFF(SECOND, NOW(), end_time) as sql_time_left, TIMESTAMPDIFF(SECOND, start_time, NOW()) as elapsed FROM rounds WHERE room_id = $room_id ORDER BY id DESC LIMIT 1");
 $round = mysqli_fetch_assoc($round_q);
 
 if ($round) {
-    // Current state time left
     $timeLeft = intval($round['sql_time_left']);
     $elapsed = intval($round['elapsed']);
-
-    // Check if Drawer still exists in the room
     $drawer_id = (int)$round['drawer_id'];
-    $drawer_check = mysqli_query($conn, "SELECT id FROM players WHERE id = $drawer_id");
-    if (mysqli_num_rows($drawer_check) === 0 && $round['status'] !== 'ended' && $round['status'] !== 'game_over') {
-        // Drawer is gone! End round early (intermission 5s)
-        mysqli_query($conn, "UPDATE rounds SET status = 'ended', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 5 SECOND) WHERE id = {$round['id']}");
-        $round['status'] = 'ended';
-        $round['sql_time_left'] = 5;
-        
-        mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($room_id, 0, 'Drawer left! Skipping turn...', 'system')");
+
+    // Drawer Disconnect Check
+    if ($round['status'] !== 'ended' && $round['status'] !== 'game_over') {
+        $drawer_check = mysqli_query($conn, "SELECT id FROM players WHERE id = $drawer_id");
+        if (mysqli_num_rows($drawer_check) === 0) {
+            mysqli_query($conn, "UPDATE rounds SET status = 'ended', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 5 SECOND) WHERE id = {$round['id']}");
+            $round['status'] = 'ended';
+            $round['sql_time_left'] = 5;
+            mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($room_id, 0, 'Drawer disconnected! Skipping...', 'system')");
+        }
     }
 
-    // 0. CHOOSING -> Random Selection if Timeout
-    if ($round['status'] === 'choosing') {
-        if ($timeLeft <= 0) {
-            // Pick random word from options
-            $options = !empty($round['word_options']) ? explode(',', $round['word_options']) : [];
-            if (empty($options)) {
-                // Generate if none
-                $wq = mysqli_query($conn, "SELECT id FROM words ORDER BY RAND() LIMIT 3");
-                while($w = mysqli_fetch_assoc($wq)) $options[] = $w['id'];
-                $ids_str = implode(',', $options);
-                mysqli_query($conn, "UPDATE rounds SET word_options = '$ids_str' WHERE id = {$round['id']}");
-            }
-            $word_id = $options[array_rand($options)];
-            // Start Countdown (3s)
-            mysqli_query($conn, "UPDATE rounds SET word_id = $word_id, status = 'countdown', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 3 SECOND) WHERE id = {$round['id']}");
-            $round['status'] = 'countdown';
-            $round['word_id'] = $word_id;
+    // 0. CHOOSING -> Countdown
+    if ($round['status'] === 'choosing' && $timeLeft <= 0) {
+        $options = !empty($round['word_options']) ? explode(',', $round['word_options']) : [];
+        if (empty($options)) {
+             $wq = mysqli_query($conn, "SELECT id FROM words ORDER BY RAND() LIMIT 3");
+             while($w = mysqli_fetch_assoc($wq)) $options[] = $w['id'];
+             $ids_str = implode(',', $options);
+             mysqli_query($conn, "UPDATE rounds SET word_options = '$ids_str' WHERE id = {$round['id']}");
         }
+        $word_id = $options[array_rand($options)];
+        mysqli_query($conn, "UPDATE rounds SET word_id = $word_id, status = 'countdown', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 3 SECOND) WHERE id = {$round['id']}");
+        $round['status'] = 'countdown';
     }
 
     // 1. COUNTDOWN -> DRAWING
-    if ($round['status'] === 'countdown') {
-        if ($timeLeft <= 0) {
-             // Get Duration
-             $room_settings_q = mysqli_query($conn, "SELECT round_duration FROM rooms WHERE id = $room_id");
-             $room_settings = mysqli_fetch_assoc($room_settings_q);
-             $duration = (isset($room_settings['round_duration']) && $room_settings['round_duration'] > 0) ? intval($room_settings['round_duration']) : 60;
-             
-             mysqli_query($conn, "UPDATE rounds SET status = 'drawing', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL $duration SECOND) WHERE id = {$round['id']}");
-             $round['status'] = 'drawing'; 
-             // Note: Response will pick up new time next poll
-        }
+    if ($round['status'] === 'countdown' && $timeLeft <= 0) {
+        $duration = intval($room['round_duration'] ?: 60);
+        mysqli_query($conn, "UPDATE rounds SET status = 'drawing', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL $duration SECOND) WHERE id = {$round['id']}");
+        $round['status'] = 'drawing';
     }
-    
+
     // 2. DRAWING -> ENDED
     elseif ($round['status'] === 'drawing') {
         if ($timeLeft <= 0) {
-            // Draw time over. Calculate Drawer Score.
-            $guess_q = mysqli_query($conn, "SELECT COUNT(DISTINCT player_id) as cnt FROM messages WHERE round_id = {$round['id']} AND type = 'guess'");
-            $g_row = mysqli_fetch_assoc($guess_q);
-            $correct_guesses = intval($g_row['cnt']);
-            
+            $g_res = mysqli_query($conn, "SELECT COUNT(DISTINCT player_id) as cnt FROM messages WHERE round_id = {$round['id']} AND type = 'guess'");
+            $correct_guesses = intval(mysqli_fetch_assoc($g_res)['cnt']);
             if ($correct_guesses > 0) {
-                // Drawer Bonus: 5 points per correct guess (low balance)
-                $drawer_points = $correct_guesses * 3;
-                mysqli_query($conn, "UPDATE players SET score = score + $drawer_points WHERE id = {$round['drawer_id']}");
+                mysqli_query($conn, "UPDATE players SET score = score + ($correct_guesses * 3) WHERE id = $drawer_id");
             }
-
-            // Move to ENDED (Scoreboard) for 10 seconds
             mysqli_query($conn, "UPDATE rounds SET status = 'ended', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 10 SECOND) WHERE id = {$round['id']}");
             $round['status'] = 'ended';
-            $round['sql_time_left'] = 10;
         } else {
-            // --- DYNAMIC HINTS ---
-            $total_dur = (int)($room['round_duration'] ?? 60);
+            // Check if ALL players (excluding drawer) guessed
+            $active_p_cnt = intval(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM players WHERE room_id = $room_id AND id != $drawer_id"))['c']);
+            $guessed_cnt = intval(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT player_id) as c FROM messages WHERE round_id = {$round['id']} AND type = 'guess'"))['c']);
             
-            // Fetch word
-            $wq = mysqli_query($conn, "SELECT word FROM words WHERE id = {$round['word_id']}");
-            $wrow = mysqli_fetch_assoc($wq);
-            $word_str = $wrow['word'] ?? "";
-            $word_len = strlen($word_str);
-            
-            if ($word_len > 0) {
-                $hints_arr = !empty($round['hints_mask']) ? explode(',', $round['hints_mask']) : [];
-                $max_hints = floor($word_len / 2.5); // Max ~40%
-                if ($max_hints < 1 && $word_len > 2) $max_hints = 1;
+            if ($active_p_cnt > 0 && $guessed_cnt >= $active_p_cnt) {
+                // End early
+                mysqli_query($conn, "UPDATE rounds SET status = 'ended', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 8 SECOND) WHERE id = {$round['id']}");
+                $round['status'] = 'ended';
+            } else {
+                // Dynamic Hints
+                $word_id = (int)$round['word_id'];
+                $word_q = mysqli_query($conn, "SELECT word FROM words WHERE id = $word_id");
+                $word_str = mysqli_fetch_assoc($word_q)['word'] ?? "";
+                $word_len = strlen($word_str);
+                if ($word_len > 2) {
+                    $hints_arr = !empty($round['hints_mask']) ? explode(',', $round['hints_mask']) : [];
+                    $max_hints = floor($word_len / 2.2);
+                    $should_h = false;
+                    $p1 = 0.35; $p2 = 0.65; $p3 = 0.85;
+                    $dur = intval($room['round_duration'] ?: 60);
+                    if ($elapsed > ($dur * $p1) && count($hints_arr) < 1) $should_h = true;
+                    if ($elapsed > ($dur * $p2) && count($hints_arr) < 2 && $max_hints >= 2) $should_h = true;
+                    if ($elapsed > ($dur * $p3) && count($hints_arr) < 3 && $max_hints >= 3) $should_h = true;
 
-                $should_hint = false;
-                if ($elapsed > ($total_dur * 0.4) && count($hints_arr) < 1) $should_hint = true;
-                if ($elapsed > ($total_dur * 0.7) && count($hints_arr) < 2 && $max_hints >= 2) $should_hint = true;
-
-                if ($should_hint && count($hints_arr) < $max_hints) {
-                    $possible = [];
-                    for($i=0; $i<$word_len; $i++) {
-                        if ($word_str[$i] !== ' ' && !in_array($i, $hints_arr)) {
-                            $possible[] = $i;
+                    if ($should_h && count($hints_arr) < $max_hints) {
+                        $p = [];
+                        for($i=0;$i<$word_len;$i++) if($word_str[$i] != ' ' && !in_array($i,$hints_arr)) $p[] = $i;
+                        if (!empty($p)) {
+                            $idx = $p[array_rand($p)];
+                            $hints_arr[] = $idx;
+                            $m = implode(',', $hints_arr);
+                            mysqli_query($conn, "UPDATE rounds SET hints_mask = '$m' WHERE id = {$round['id']}");
+                            $round['hints_mask'] = $m;
                         }
-                    }
-                    if (!empty($possible)) {
-                        $new_idx = $possible[array_rand($possible)];
-                        $hints_arr[] = $new_idx;
-                        $new_mask = implode(',', $hints_arr);
-                        mysqli_query($conn, "UPDATE rounds SET hints_mask = '$new_mask' WHERE id = {$round['id']}");
-                        $round['hints_mask'] = $new_mask;
                     }
                 }
             }
         }
     }
-    
-    // 3. ENDED -> NEXT TURN
-    elseif ($round['status'] === 'ended') {
-        if ($timeLeft <= 0) {
-            startNextTurn($conn, $room_id);
-            // $round status will be updated next poll
-        }
+
+    // 3. ENDED -> Next
+    elseif ($round['status'] === 'ended' && $timeLeft <= 0) {
+        startNextTurn($conn, $room_id);
     }
-    
-    // 4. GAME OVER -> NEW GAME
-    elseif ($round['status'] === 'game_over') {
-        if ($timeLeft <= 0) {
-            // AUTO RESTART
-             $pq = mysqli_query($conn, "SELECT id FROM players WHERE room_id = $room_id");
-             $p_ids = [];
-             while($p = mysqli_fetch_assoc($pq)) $p_ids[] = $p['id'];
-             shuffle($p_ids);
-             foreach($p_ids as $idx => $pid) {
-                mysqli_query($conn, "UPDATE players SET turn_order = $idx, score = 0 WHERE id = $pid");
-             }
-             mysqli_query($conn, "UPDATE rooms SET status = 'playing', current_round = 1 WHERE id = $room_id");
-             mysqli_query($conn, "DELETE FROM rounds WHERE room_id = $room_id");
-             startNextTurn($conn, $room_id);
-        }
+
+    // 4. GAME OVER -> New
+    elseif ($round['status'] === 'game_over' && $timeLeft <= 0) {
+        mysqli_query($conn, "UPDATE players SET score = 0 WHERE room_id = $room_id");
+        mysqli_query($conn, "UPDATE rooms SET status = 'playing', current_round = 1 WHERE id = $room_id");
+        mysqli_query($conn, "DELETE FROM rounds WHERE room_id = $room_id");
+        startNextTurn($conn, $room_id);
     }
 }
 
@@ -317,7 +265,7 @@ jsonResponse([
 
 function startNextTurn($conn, $room_id) {
     // Determine Next Turn
-    $cnt_q = mysqli_query($conn, "SELECT COUNT(*) as c FROM rounds WHERE room_id = $room_id AND status != 'game_over'");
+    $cnt_q = mysqli_query($conn, "SELECT COUNT(*) as c FROM rounds WHERE room_id = $room_id AND status NOT IN ('game_over', 'choosing')");
     $cnt_row = mysqli_fetch_assoc($cnt_q);
     $turns_done = intval($cnt_row['c']);
     
@@ -326,9 +274,12 @@ function startNextTurn($conn, $room_id) {
     $r_info = mysqli_fetch_assoc($r_res);
     $max_rounds = intval($r_info['max_rounds']);
     
-    $p_res = mysqli_query($conn, "SELECT COUNT(*) as c FROM players WHERE room_id = $room_id");
-    $p_info = mysqli_fetch_assoc($p_res);
-    $num_players = max(1, intval($p_info['c']));
+    $p_res = mysqli_query($conn, "SELECT id FROM players WHERE room_id = $room_id ORDER BY turn_order ASC, id ASC");
+    $players = [];
+    while($p = mysqli_fetch_assoc($p_res)) $players[] = $p['id'];
+    
+    $num_players = count($players);
+    if ($num_players === 0) return; // Nobody left
     
     $global_round = floor($turns_done / $num_players) + 1;
     $turn_index = $turns_done % $num_players;
@@ -342,10 +293,8 @@ function startNextTurn($conn, $room_id) {
     
     mysqli_query($conn, "UPDATE rooms SET current_round = $global_round WHERE id = $room_id");
     
-    // Find drawer
-    $d_q = mysqli_query($conn, "SELECT id FROM players WHERE room_id = $room_id AND turn_order = $turn_index");
-    $d_row = mysqli_fetch_assoc($d_q);
-    $drawer_id = $d_row ? $d_row['id'] : 0; // Should exist if sync is good
+    // Pick drawer based on index in current players list
+    $drawer_id = $players[$turn_index];
 
     // Pre-generate word options
     $wq = mysqli_query($conn, "SELECT id FROM words ORDER BY RAND() LIMIT 3");

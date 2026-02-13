@@ -8,7 +8,11 @@ $base_path = rtrim($scriptDir, '/') . '/';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/x-icon" href="<?= $base_path ?>favicon.ico">
     <title>Draw & Guess - Creative Drawing Party!</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -285,8 +289,8 @@ $base_path = rtrim($scriptDir, '/') . '/';
         </div>
     </div>
 
-    <script src="<?= $base_path ?>js/sounds.js"></script>
-    <script src="<?= $base_path ?>js/lobby.js"></script>
+    <script src="<?= $base_path ?>js/sounds.js?v=<?= time() ?>"></script>
+    <script src="<?= $base_path ?>js/lobby.js?v=<?= time() ?>"></script>
     <script>
         // --- Modal & UI Logic ---
         const modal = document.getElementById('create-modal');
