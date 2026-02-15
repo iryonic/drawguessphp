@@ -209,6 +209,11 @@ if ($base_path == '/' || $base_path == '\\') $base_path = '/';
                 <span id="timer" class="font-mono font-bold text-xs md:text-lg">60</span>
             </div>
 
+            <!-- Music Toggle -->
+            <button id="music-toggle" onclick="toggleMusicUI()" class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-blue-50 border-2 border-ink rounded-lg shadow-[2px_2px_0px_#000] hover:bg-blue-100 transition active:translate-y-0.5 active:shadow-none shrink-0" title="Toggle Music">
+                <span id="music-icon" class="text-sm md:text-lg">🔊</span>
+            </button>
+
             <!-- Leave Button -->
             <button onclick="leaveRoom()" class="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 bg-red-50 border-2 border-ink rounded-lg shadow-[2px_2px_0px_#000] hover:bg-red-100 transition active:translate-y-0.5 active:shadow-none shrink-0" title="Leave">
                 <span class="text-sm md:text-lg">🏃</span>

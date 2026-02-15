@@ -7,14 +7,23 @@ class SoundManager {
         this.bgmEnabled = false;
         this.config = null;
 
-        const unlock = () => {
+        const unlock = async () => {
             this.init();
-            if (this.ctx && this.ctx.state === 'running') {
-                this.unlocked = true;
-                this.loadConfig(); // Fetch music settings on first interaction
-                document.removeEventListener('click', unlock);
-                document.removeEventListener('touchstart', unlock);
-                document.removeEventListener('keydown', unlock);
+            if (this.ctx) {
+                try {
+                    if (this.ctx.state === 'suspended') {
+                        await this.ctx.resume();
+                    }
+                    if (this.ctx.state === 'running') {
+                        this.unlocked = true;
+                        this.loadConfig(); // Fetch music settings on first interaction
+                        document.removeEventListener('click', unlock);
+                        document.removeEventListener('touchstart', unlock);
+                        document.removeEventListener('keydown', unlock);
+                    }
+                } catch (e) {
+                    console.error("Audio unlock failed", e);
+                }
             }
         };
 
@@ -26,8 +35,8 @@ class SoundManager {
     async loadConfig() {
         try {
             const res = await (await fetch(APP_ROOT + 'api/settings.php')).json();
-            if (res.success) {
-                this.config = res.settings;
+            if (res.success && res.data && res.data.settings) {
+                this.config = res.data.settings;
                 this.bgmEnabled = this.config.lobby_music_enabled === '1';
             }
         } catch (e) { }
@@ -72,13 +81,25 @@ class SoundManager {
     }
 
     playBGM() {
-        if (!this.bgmEnabled || !this.config) return;
-        if (this.bgm) return; // Already playing
+        if (!this.bgmEnabled || !this.config || this.bgm) return;
 
-        this.bgm = new Audio(this.config.lobby_music_url);
+        const url = this.config.lobby_music_url;
+        if (!url) return;
+        const fullUrl = url.startsWith('http') ? url : (APP_ROOT + url);
+
+        this.bgm = new Audio(fullUrl);
         this.bgm.loop = true;
         this.bgm.volume = parseFloat(this.config.music_volume || 0.3);
-        this.bgm.play().catch(e => console.warn("BGM play blocked", e));
+
+        // Ensure AudioContext is resumed before playing BGM if possible
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => { });
+        }
+
+        this.bgm.play().catch(e => {
+            console.warn("BGM play blocked or failed", e);
+            // If it failed, we'll try again on the next interaction if it was a block
+        });
     }
 
     stopBGM() {
@@ -86,6 +107,20 @@ class SoundManager {
             this.bgm.pause();
             this.bgm = null;
         }
+    }
+
+    toggleBGM() {
+        this.bgmEnabled = !this.bgmEnabled;
+        if (this.bgmEnabled) {
+            this.playBGM();
+        } else {
+            this.stopBGM();
+        }
+        return this.bgmEnabled;
+    }
+
+    getBGMStatus() {
+        return this.bgmEnabled;
     }
 
     tone(freq, type, duration, vol) {

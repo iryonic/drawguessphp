@@ -394,11 +394,18 @@ async function syncState() {
         if (document.getElementById('current-round')) document.getElementById('current-round').textContent = data.room.current_round;
         if (document.getElementById('max-rounds')) document.getElementById('max-rounds').textContent = data.room.max_rounds;
 
-        // BGM Logic
-        if (gameState.status === 'lobby' || gameState.status === 'ended') {
+        // BGM Logic: Play only in lobby or between rounds
+        if (gameState.status === 'lobby' || gameState.status === 'ended' || gameState.status === 'game_over' || gameState.status === 'finished') {
             sfx.playBGM();
-        } else if (gameState.status === 'drawing' || gameState.status === 'countdown') {
+        } else {
+            // Stop during choosing, countdown, and drawing
             sfx.stopBGM();
+        }
+
+        // Sync Music Icon
+        const musicIcon = document.getElementById('music-icon');
+        if (musicIcon) {
+            musicIcon.innerText = sfx.getBGMStatus() ? '🔊' : '🔇';
         }
 
         if (data.round.time_left !== undefined) {
@@ -579,6 +586,18 @@ async function syncState() {
         if (typeof response !== 'undefined') console.log("Response Status:", response.status);
     }
 }
+
+function toggleMusicUI() {
+    const enabled = sfx.toggleBGM();
+    const icon = document.getElementById('music-icon');
+    if (icon) {
+        icon.innerText = enabled ? '🔊' : '🔇';
+    }
+}
+
+// Global scope initialization
+window.syncState = syncState;
+window.toggleMusicUI = toggleMusicUI;
 
 function showTurnNotification() {
     if (turnNotif) {

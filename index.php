@@ -231,12 +231,12 @@ if ($base_path == '/' || $base_path == '\\') $base_path = '/';
         </div>
         
         <!-- Footer Info -->
-         <div class="flex items-center justify-center gap-1 text-xs font-bold text-gray-400 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition duration-500">
+         <div class="flex items-center justify-center gap-1 text-xs font-bold text-gray-400 grayscale opacity-80 hover:grayscale-0 hover:opacity-100 transition duration-500">
             <div class="flex items-center gap-1">
               Version 1.0  Developed by 
             </div>
             <div class="flex items-center gap-1">
-                <a href="https://irfanamanzoor.in"><span>Irfan Manzoor</span> </a>
+                <a href="https://irfanmanzoor.in" class="text-gray-900"><span>Irfan Manzoor</span> </a>
             </div>
          </div>
 

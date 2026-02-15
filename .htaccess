@@ -1,12 +1,11 @@
 RewriteEngine On
-
-# Detect the base directory automatically if possible, or assume root/subfolder based on request
-# But for simplicity and robustness in XAMPP vs Production, let's use a standard pattern:
+# Security: Disable directory browsing
+Options -Indexes
 
 # 1. Clean Room URLs: /room/CODE -> game.php?room=CODE
 RewriteRule ^room/([A-Za-z0-9]+)/?$ game.php?room=$1 [QSA,L]
 
-# 2. Admin URLs
+# 2. Admin URLs (Clean Routes)
 RewriteRule ^admin/?$ admin/index.php [L]
 RewriteRule ^admin/words/?$ admin/words.php [L]
 RewriteRule ^admin/avatars/?$ admin/avatars.php [L]

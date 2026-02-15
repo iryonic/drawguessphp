@@ -1,4 +1,23 @@
 <?php
+// Determine the dynamic base path securely
+$scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+$base_path = '/';
+if ($scriptName) {
+    // Check if we are in admin or api subfolder
+    $api_pos = strpos($scriptName, '/api/');
+    $admin_pos = strpos($scriptName, '/admin/');
+    
+    if ($api_pos !== false) {
+        $base_path = substr($scriptName, 0, $api_pos) . '/';
+    } elseif ($admin_pos !== false) {
+        $base_path = substr($scriptName, 0, $admin_pos) . '/';
+    } else {
+        $base_path = rtrim(dirname($scriptName), '/\\') . '/';
+    }
+}
+if ($base_path == '/' || $base_path == '//') $base_path = '/';
+define('APP_ROOT', $base_path);
+
 // Prevent unwanted output
 ob_start();
 error_reporting(E_ALL);
