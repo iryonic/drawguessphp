@@ -44,6 +44,12 @@ if (isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true) {
             </div>
         <?php endif; ?>
 
+        <?php if(isset($_GET['msg'])): ?>
+            <div class="bg-green-50 text-green-700 p-3 rounded-xl border-2 border-green-500 mb-6 text-center font-black text-sm">
+                ✅ <?= htmlspecialchars($_GET['msg']) ?>
+            </div>
+        <?php endif; ?>
+
         <form method="POST" action="" class="space-y-6">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Identity</label>
