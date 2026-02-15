@@ -1,16 +1,22 @@
+// --- Layout Constants & Global State ---
+const MOBILE_BREAKPOINT = 1024;
+const DEFAULT_MOBILE_PANEL_H = '50svh';
+window.currentTab = (window.innerWidth < MOBILE_BREAKPOINT) ? 'chat' : 'draw';
+let currentTab = window.currentTab;
+
 const player = JSON.parse(localStorage.getItem('dg_player') || '{}');
 if (!player.token) window.location.href = APP_ROOT || './';
 
+// UI Elements
 const roomCodeDisplay = document.getElementById('room-code-display');
 const playerList = document.getElementById('player-list');
 const canvas = document.getElementById('game-canvas');
-const ctx = canvas.getContext('2d');
-const chatBox = document.getElementById('chat-box');
+const ctx = canvas ? canvas.getContext('2d') : null;
 const overlay = document.getElementById('overlay');
-const overlayTitle = document.getElementById('overlay-title'); // Added
-const overlaySubtitle = document.getElementById('overlay-subtitle'); // Added
-const wordSelect = document.getElementById('word-selection'); // Added
-const startBtn = document.getElementById('start-btn'); // Added
+const overlayTitle = document.getElementById('overlay-title');
+const overlaySubtitle = document.getElementById('overlay-subtitle');
+const wordSelect = document.getElementById('word-selection');
+const startBtn = document.getElementById('start-btn');
 const wordDisplay = document.getElementById('word-display');
 const timerEl = document.getElementById('timer');
 const timerProgress = document.getElementById('timer-progress');
@@ -22,18 +28,13 @@ const tabBtns = {
     chat: document.getElementById('tab-chat'),
     rank: document.getElementById('tab-rank')
 };
-const views = {
-    draw: document.getElementById('view-draw'),
-    chat: document.getElementById('view-chat'),
-    rank: document.getElementById('view-rank')
-};
 
-// Game State
+// Game State Object
 let gameState = {
     status: 'lobby',
     roundId: 0,
-    lastStrokeId: 0, // Reset on load to fetch full drawing
-    lastMsgId: 0,    // Reset on load to fetch full chat
+    lastStrokeId: 0,
+    lastMsgId: 0,
     isDrawer: false,
     color: '#000000',
     size: 5,
@@ -42,58 +43,38 @@ let gameState = {
     totalTime: 60
 };
 
-// Update persist (noop now, kept for compatibility if called elsewhere)
+// Game Persist Logic
 function updatePersist() {
-    // sessionStorage.setItem('dg_lastStrokeId', gameState.lastStrokeId);
-    // sessionStorage.setItem('dg_lastMsgId', gameState.lastMsgId);
+    // Optionally save state to session storage if needed for tab recovery
+    sessionStorage.setItem('dg_lastStrokeId', gameState.lastStrokeId);
+    sessionStorage.setItem('dg_lastMsgId', gameState.lastMsgId);
 }
 
-// Canvas State
+// Drawing State
 let painting = false;
 let pointsBuffer = [];
 let lastPos = { x: 0, y: 0 };
 let strokeHistory = [];
-
-// Local Timer
+let lastSendTime = 0;
 let timerInterval = null;
-let lastSendTime = 0; // Throttling helper for drawing mid-stroke
 
-// Init
+// --- Initialization ---
 if (roomCodeDisplay) roomCodeDisplay.innerText = player.room_code || '????';
-// resizeCanvas() called after declaration now
-
-// Default to Chat on Mobile
-if (window.innerWidth < 1024) {
-    switchTab('chat');
-}
-
-// Window Resize Handling
-window.addEventListener('resize', resizeCanvas);
-
-// Debounce resize to prevent storming
-var resizeTimeout;
-// Constants for layout
-const MOBILE_BREAKPOINT = 1024;
-const DEFAULT_MOBILE_PANEL_H = '50svh';
 
 function resizeCanvas() {
     const container = document.getElementById('canvas-container');
     if (!container) return;
-
-    // Set internal resolution match display size
     const wrapper = container.querySelector('.neo-border');
     if (!wrapper) return;
-
     canvas.width = wrapper.clientWidth;
     canvas.height = wrapper.clientHeight;
-
-    // Invalidate drawing history to force a full re-fetch/redraw
-    gameState.lastStrokeId = 0;
-    syncDraw();
+    if (typeof gameState !== 'undefined') gameState.lastStrokeId = 0;
+    if (typeof syncDraw === 'function') syncDraw();
 }
 
-// Init canvas size immediately
+window.addEventListener('resize', resizeCanvas);
 if (canvas) setTimeout(resizeCanvas, 300);
+
 
 // ... (lines 80-211 skipped) ...
 
@@ -138,71 +119,71 @@ timerInterval = setInterval(updateLocalTimer, 1000);
 
 // --- Functions --- //
 
-// Mobile Tab Switching
-function switchTab(tab) {
-    const drawView = document.getElementById('view-draw');
-    const mobilePanel = document.getElementById('mobile-panel');
-    const mobileChat = document.getElementById('view-chat-mobile');
-    const mobileRank = document.getElementById('view-rank');
+// --- Core Actions & UI Logic ---
 
-    // Reset Buttons
-    Object.values(tabBtns).forEach(btn => {
-        if (btn) {
-            btn.classList.add('text-gray-400');
-            btn.classList.remove('text-ink', 'bg-gray-100');
-            const icon = btn.querySelector('span');
-            if (icon) {
-                icon.classList.add('grayscale', 'opacity-50');
-                icon.classList.remove('opacity-100');
-            }
-        }
+function switchTab(tab) {
+    if (window.innerWidth >= MOBILE_BREAKPOINT) return;
+    currentTab = window.currentTab = tab;
+
+    const tabs = {
+        rank: document.getElementById('tab-rank'),
+        draw: document.getElementById('tab-draw'),
+        chat: document.getElementById('tab-chat')
+    };
+
+    const views = {
+        rank: document.getElementById('view-rank'),
+        chat: document.getElementById('view-chat-mobile')
+    };
+
+    // 1. Update Tab Buttons
+    Object.keys(tabs).forEach(k => {
+        const t = tabs[k];
+        if (!t) return;
+        t.classList.toggle('active', k === tab);
     });
 
-    // Active Button
-    if (tabBtns[tab]) {
-        tabBtns[tab].classList.remove('text-gray-400');
-        tabBtns[tab].classList.add('text-ink', 'bg-gray-100');
-        const icon = tabBtns[tab].querySelector('span');
-        if (icon) {
-            icon.classList.remove('grayscale', 'opacity-50');
-            icon.classList.add('opacity-100');
-        }
-    }
+    // 2. Handle Views with smooth height change
+    if (tab === 'draw') {
+        document.documentElement.style.setProperty('--mobile-panel-h', '0px');
+        setTimeout(() => {
+            if (views.rank) views.rank.classList.add('hidden');
+            if (views.chat) views.chat.classList.add('hidden');
+        }, 150);
+    } else {
+        document.documentElement.style.setProperty('--mobile-panel-h', DEFAULT_MOBILE_PANEL_H);
 
-    // Logic for Views (Split Screen)
-    if (window.innerWidth < 1024) {
-        if (tab === 'draw') {
-            // Full Screen Canvas mode
-            drawView.classList.remove('h-[50vh]');
-            drawView.classList.add('h-full', 'flex-1');
-
-            mobilePanel.style.height = '0';
-            mobilePanel.style.flexGrow = '0';
-        } else {
-            // Split Screen mode
-            drawView.classList.remove('h-full', 'flex-1');
-            drawView.classList.add('h-[40vh]'); // Shrink Canvas to 40% to give chat more room
-
-            mobilePanel.classList.remove('h-0');
-            mobilePanel.style.height = 'auto';
-            mobilePanel.style.flexGrow = '1';
-
-            // Toggle Content
-            mobileChat.classList.add('hidden');
-            mobileRank.classList.add('hidden');
-
-            if (tab === 'chat') {
-                mobileChat.classList.remove('hidden');
-                // Force scroll to bottom when switching to chat
-                const box = document.getElementById('chat-box-mobile');
-                if (box) setTimeout(() => box.scrollTop = box.scrollHeight, 10);
+        Object.keys(views).forEach(k => {
+            const v = views[k];
+            if (!v) return;
+            if (k === tab) {
+                v.classList.remove('hidden');
+                v.classList.add('flex', 'animate-slide-up');
+            } else {
+                v.classList.add('hidden');
+                v.classList.remove('flex', 'animate-slide-up');
             }
-            if (tab === 'rank') mobileRank.classList.remove('hidden');
+        });
+
+        if (tab === 'chat') {
+            setTimeout(() => {
+                const box = document.getElementById('chat-box-mobile');
+                if (box) box.scrollTop = box.scrollHeight;
+            }, 100);
         }
-        resizeCanvas();
     }
-    resizeCanvas();
+
+    try { sfx.play('pop'); } catch (e) { }
+    // Resize canvas after layout shift finishes
+    setTimeout(resizeCanvas, 350);
 }
+
+// Initial Mobile View
+if (window.innerWidth < MOBILE_BREAKPOINT) {
+    setTimeout(() => switchTab('chat'), 100);
+}
+
+
 
 window.switchTab = switchTab;
 
@@ -610,18 +591,28 @@ function updatePlayers(players, drawerId) {
         players.forEach((p, index) => {
             const isDrawer = p.id == drawerId;
             const div = document.createElement('div');
-            // Compact Ranking with trophy for #1
+            // Ranking
             const rank = index === 0 ? '👑' : (index + 1);
-            div.className = `p-3 rounded-xl flex items-center gap-3 transition-all border-2 ${isDrawer ? 'border-pop-yellow bg-yellow-50 shadow-sm' : 'border-gray-200 bg-white'}`;
+            const isMe = p.is_me;
+
+            div.className = `group p-3.5 rounded-2xl flex items-center gap-4 transition-all border-[3px] shadow-[4px_4px_0px_#1e1e1e33] ${isDrawer ? 'border-pop-yellow bg-yellow-50/50 shadow-pop-yellow/20' : 'border-gray-100 bg-white hover:border-gray-200'} ${isMe ? 'ring-2 ring-pop-blue ring-offset-2' : ''}`;
+
             div.innerHTML = `
-                <div class="font-bold text-gray-500 w-5 text-center text-sm">${rank}</div>
-                <div class="text-2xl">${p.avatar}</div>
+                <div class="font-black text-gray-400 w-6 h-6 rounded-full flex items-center justify-center text-xs bg-gray-50 border border-gray-100 shrink-0">
+                    ${rank}
+                </div>
+                <div class="text-3xl shrink-0 filter drop-shadow-sm group-hover:scale-110 transition-transform">${p.avatar}</div>
                 <div class="flex-1 min-w-0">
-                    <div class="font-bold text-sm md:text-base flex justify-between items-center truncate">
-                        <span class="truncate text-ink">${p.username}</span>
-                        ${isDrawer ? '<span class="text-xs ml-1 bg-yellow-300 px-1 rounded border border-black">✏️</span>' : ''}
+                    <div class="flex items-center gap-1.5 mb-0.5">
+                        <span class="font-black text-ink truncate">${p.username}${isMe ? ' (You)' : ''}</span>
+                        ${isDrawer ? '<span class="animate-bounce-slow text-xs bg-pop-yellow border-2 border-ink px-1.5 py-0.5 rounded-full font-black text-[8px] uppercase tracking-tighter">Drawing</span>' : ''}
                     </div>
-                    <div class="text-xs text-indigo-500 font-mono font-bold">${p.score} pts</div>
+                    <div class="flex items-center gap-2">
+                         <div class="h-1.5 flex-1 bg-gray-100 rounded-full overflow-hidden">
+                             <div class="h-full bg-pop-purple transition-all duration-1000" style="width: ${Math.min(100, (p.score / 500) * 100)}%"></div>
+                         </div>
+                         <span class="text-[10px] font-black font-mono text-pop-purple shrink-0">${p.score} <span class="text-[8px] opacity-70">PTS</span></span>
+                    </div>
                 </div>
             `;
             list.appendChild(div);
@@ -777,24 +768,32 @@ async function syncChat() {
                         if (m.type === 'guess') {
                             try {
                                 sfx.play('success');
-                                confetti({
-                                    particleCount: 100,
-                                    spread: 70,
-                                    origin: { y: 0.6 },
-                                    colors: ['#b9f6ca', '#ffeb3b', '#4fc3f7', '#ff80ab']
-                                });
+                                confetti({ particleCount: 60, spread: 50, origin: { y: 0.8 }, colors: ['#b9f6ca', '#facc15'] });
                             } catch (e) { }
-                            div.className = "text-sm text-center font-black px-4 py-3 rounded-xl border-2 mx-2 my-4 shadow-[4px_4px_0px_#1e1e1e] bg-pop-green text-black border-black transform rotate-1 animate-bounce";
-                            div.innerText = `🎉 ${username} guessed the word correctly!`;
+                            div.className = "flex justify-center my-4 px-2 w-full";
+                            div.innerHTML = `
+                                <div class="bg-pop-green border-2 border-ink px-4 py-2 rounded-xl shadow-[4px_4px_0px_#000] text-xs font-black uppercase text-center animate-bounce">
+                                    🎉 ${username} discovered the word!
+                                </div>
+                            `;
                         } else {
-                            // System
-                            div.className = "text-xs text-center font-bold px-3 py-2 rounded-lg border-2 mx-2 my-2 shadow-[2px_2px_0px_#1e1e1e] bg-pop-yellow text-black border-black";
-                            div.innerText = m.message;
+                            div.className = "flex justify-center my-2 px-2 w-full";
+                            div.innerHTML = `
+                                <div class="bg-pop-yellow border-2 border-ink px-4 py-1.5 rounded-full shadow-[2px_2px_0px_#000] text-[10px] font-black uppercase tracking-tight">
+                                    📢 ${m.message}
+                                </div>
+                            `;
                         }
                     } else {
-                        try { sfx.play('pop'); } catch (e) { }
-                        div.className = "text-sm mb-2 break-words p-2 rounded-lg mx-2 flex flex-col bg-white border-2 border-gray-100";
-                        div.innerHTML = `<span class="font-bold text-black text-[10px] uppercase tracking-wide mb-0.5">${username}</span> <span class="text-gray-800">${m.message}</span>`;
+                        const isMe = m.player_id == player.id;
+                        div.className = `flex flex-col mb-3 max-w-[90%] px-2 ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`;
+                        div.innerHTML = `
+                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 px-1">${username}</span>
+                            <div class="px-4 py-2.5 rounded-2xl border-2 shadow-sm font-bold text-sm leading-snug 
+                                ${isMe ? 'bg-pop-blue border-ink text-black rounded-tr-none' : 'bg-white border-ink text-ink rounded-tl-none'}">
+                                ${m.message}
+                            </div>
+                        `;
                     }
                     return div;
                 };
@@ -816,8 +815,7 @@ async function syncChat() {
     } catch (e) { }
 }
 
-let currentTab = (window.innerWidth < 1024) ? 'chat' : 'draw';
-
+// Helper Functions
 function showToast(m) {
     const toastContainer = document.getElementById('canvas-toasts');
     if (!toastContainer) return;
@@ -863,58 +861,61 @@ function switchTab(tab) {
     if (window.innerWidth >= MOBILE_BREAKPOINT) return;
     currentTab = tab;
 
-    const viewRank = document.getElementById('view-rank');
-    const viewChat = document.getElementById('view-chat-mobile');
     const tabs = {
         rank: document.getElementById('tab-rank'),
         draw: document.getElementById('tab-draw'),
         chat: document.getElementById('tab-chat')
     };
 
-    // Reset styles
+    const views = {
+        rank: document.getElementById('view-rank'),
+        chat: document.getElementById('view-chat-mobile')
+    };
+
+    // 1. Update Tab Buttons
     Object.keys(tabs).forEach(k => {
         const t = tabs[k];
         if (!t) return;
-        t.classList.remove('bg-pop-yellow/10', 'text-ink');
-        t.classList.add('text-gray-400');
-        const icon = t.querySelector('span:first-child');
-        if (icon) icon.classList.add('grayscale', 'opacity-50');
+        t.classList.toggle('active', k === tab);
     });
 
-    // Set active tab
-    const activeTab = tabs[tab];
-    if (activeTab) {
-        activeTab.classList.remove('text-gray-400');
-        activeTab.classList.add('bg-pop-yellow/10', 'text-ink');
-        const icon = activeTab.querySelector('span:first-child');
-        if (icon) icon.classList.remove('grayscale', 'opacity-50');
-    }
-
-    // Handle Views
+    // 2. Handle Views with smooth height change
     if (tab === 'draw') {
         document.documentElement.style.setProperty('--mobile-panel-h', '0px');
-        viewRank.classList.add('hidden');
-        viewChat.classList.add('hidden');
+        // Delay hiding views slightly for transition
+        setTimeout(() => {
+            if (views.rank) views.rank.classList.add('hidden');
+            if (views.chat) views.chat.classList.add('hidden');
+        }, 150);
     } else {
         document.documentElement.style.setProperty('--mobile-panel-h', DEFAULT_MOBILE_PANEL_H);
-        if (tab === 'rank') {
-            viewRank.classList.remove('hidden');
-            viewRank.classList.add('flex');
-            viewChat.classList.add('hidden');
-        } else if (tab === 'chat') {
-            viewRank.classList.add('hidden');
-            viewChat.classList.remove('hidden');
-            viewChat.classList.add('flex');
-            // Scroll chat to bottom with delay
+
+        // Show active view
+        Object.keys(views).forEach(k => {
+            const v = views[k];
+            if (!v) return;
+            if (k === tab) {
+                v.classList.remove('hidden');
+                v.classList.add('flex', 'animate-slide-up');
+            } else {
+                v.classList.add('hidden');
+                v.classList.remove('flex', 'animate-slide-up');
+            }
+        });
+
+        if (tab === 'chat') {
             setTimeout(() => {
                 const box = document.getElementById('chat-box-mobile');
                 if (box) box.scrollTop = box.scrollHeight;
-            }, 50);
+            }, 100);
         }
     }
 
-    // Important: resize canvas after layout shift
-    setTimeout(resizeCanvas, 310);
+    // 3. Performance & Clean Haptics
+    try { sfx.play('pop'); } catch (e) { }
+
+    // Resize canvas after layout shift finishes
+    setTimeout(resizeCanvas, 350);
 }
 
 window.switchTab = switchTab;

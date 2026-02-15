@@ -1,8 +1,8 @@
 <?php
 // Determine the dynamic base path securely
-$scriptDir = dirname($_SERVER['SCRIPT_NAME']);
-$scriptDir = str_replace('\\', '/', $scriptDir); // Normalize Windows paths
-$base_path = rtrim($scriptDir, '/') . '/';
+$scriptName = $_SERVER['SCRIPT_NAME'];
+$base_path = rtrim(dirname($scriptName), '/\\') . '/';
+if ($base_path == '/' || $base_path == '\\') $base_path = '/';
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,6 +14,7 @@ $base_path = rtrim($scriptDir, '/') . '/';
     <title>Draw & Guess - In Game</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="<?= $base_path ?>favicon.ico">
     <link rel="manifest" href="<?= $base_path ?>manifest.json">
     <meta name="theme-color" content="#facc15">
     <script>
@@ -70,8 +71,12 @@ $base_path = rtrim($scriptDir, '/') . '/';
 
         :root {
             --header-h: 3.5rem;
-            --nav-h: 4rem;
+            --nav-h: 4.5rem;
             --mobile-panel-h: 0px;
+            --pop-yellow: #ffeb3b;
+            --pop-blue: #4fc3f7;
+            --pop-pink: #ff80ab;
+            --ink: #1e1e1e;
         }
 
         @media (min-width: 768px) {
@@ -81,53 +86,76 @@ $base_path = rtrim($scriptDir, '/') . '/';
         }
 
         .neo-border {
-            border: 3px solid #1e1e1e;
-            box-shadow: 4px 4px 0px #1e1e1e;
+            border: 3px solid var(--ink);
+            box-shadow: 4px 4px 0px var(--ink);
         }
         
         .neo-btn {
-            border: 3px solid #1e1e1e;
-            box-shadow: 4px 4px 0px #1e1e1e;
-            transition: all 0.1s;
+            border: 3px solid var(--ink);
+            box-shadow: 4px 4px 0px var(--ink);
+            transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .neo-btn:active {
             transform: translate(2px, 2px);
-            box-shadow: 2px 2px 0px #1e1e1e;
-        }
-        .neo-btn.selected {
-            background: #e0e0e0;
-            transform: translate(2px, 2px);
-            box-shadow: 2px 2px 0px #1e1e1e;
+            box-shadow: 2px 2px 0px var(--ink);
         }
 
         .chat-pattern {
-            background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%, transparent 75%, #f0f0f0 75%, #f0f0f0), linear-gradient(45deg, #f0f0f0 25%, transparent 25%, transparent 75%, #f0f0f0 75%, #f0f0f0);
-            background-size: 20px 20px;
-            background-position: 0 0, 10px 10px;
+            background-image: radial-gradient(var(--ink) 0.5px, transparent 0.5px);
+            background-size: 15px 15px;
+            background-color: #f9fafb;
         }
 
-        /* Tooltip Arrow */
-        .tooltip-arrow::after {
-            content: '';
+        /* App-like Tabs */
+        .tab-btn {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .tab-btn.active {
+            color: var(--ink) !important;
+        }
+        .tab-btn.active .tab-icon {
+            transform: translateY(-8px) scale(1.2);
+            filter: grayscale(0) !important;
+            opacity: 1 !important;
+        }
+        .tab-btn.active .tab-label {
+            opacity: 1;
+            transform: translateY(-2px);
+        }
+        .tab-indicator {
             position: absolute;
-            bottom: -6px;
-            left: 50%;
-            margin-left: -6px;
-            border-width: 6px 6px 0;
-            border-color: #1e1e1e transparent transparent transparent;
+            bottom: 0.5rem;
+            width: 4px;
+            height: 4px;
+            border-radius: 99px;
+            background: var(--ink);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            opacity: 0;
+        }
+        .tab-btn.active .tab-indicator {
+            opacity: 1;
+            width: 20px;
         }
 
         /* Brush Preview */
         .color-dot {
-            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        .color-dot:hover {
-            transform: scale(1.2);
+        .color-dot:active {
+            transform: scale(0.9);
         }
         .color-dot.active {
-            transform: scale(1.1);
-            border-color: white;
-            box-shadow: 0 0 0 3px #1e1e1e;
+            transform: scale(1.2);
+            box-shadow: 0 0 0 3px var(--pop-yellow), 0 0 0 6px var(--ink);
+        }
+
+        @keyframes slide-up {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        .animate-slide-up {
+            animation: slide-up 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
     </style>
 </head>
@@ -135,10 +163,9 @@ $base_path = rtrim($scriptDir, '/') . '/';
 <body class="fixed inset-0 w-full h-[100dvh] flex flex-col supports-[height:100svh]:h-[100svh]">
 
     <!-- Header / Top Bar -->
-    <!-- Header / Top Bar -->
-    <header class="h-[var(--header-h)] pt-[env(safe-area-inset-top)] bg-white border-b-[3px] border-ink flex items-center justify-between px-2 md:px-4 shrink-0 z-20 relative shadow-sm gap-1 md:gap-2 transition-all">
-        <!-- Decoration -->
-        <div class="absolute -bottom-1 left-0 w-full h-1 bg-gray-100 hidden"></div>
+    <header class="h-[var(--header-h)] pt-[env(safe-area-inset-top)] bg-white/95 backdrop-blur-md border-b-[3px] border-ink flex items-center justify-between px-2 md:px-4 shrink-0 z-50 relative gap-1 md:gap-2 transition-all">
+        <!-- Decoration Gradient -->
+        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 pointer-events-none opacity-20"></div>
 
         <!-- Left: Logo & Room Code -->
         <div class="flex items-center gap-1.5 md:gap-4 shrink-0">
@@ -205,7 +232,7 @@ $base_path = rtrim($scriptDir, '/') . '/';
         </aside>
 
         <!-- Main Center: Canvas -->
-        <main id="view-draw" class="order-1 w-full lg:order-none lg:flex-1 lg:h-auto flex flex-col bg-gray-100 relative transition-[height] duration-300 ease-in-out h-full lg:h-full">
+        <main id="view-draw" class="order-1 flex-1 flex flex-col bg-gray-100 relative transition-all duration-300 ease-in-out sm:rounded-none rounded-b-[2rem] overflow-hidden">
             
             <!-- Tools (Only Visible when drawing) -->
             <div id="drawing-tools" class="hidden transition-all duration-300 transform translate-y-0 z-10 w-full bg-white border-b-2 border-ink px-2 md:px-4 py-2 flex items-center justify-between shadow-sm gap-2 shrink-0">
@@ -290,11 +317,19 @@ $base_path = rtrim($scriptDir, '/') . '/';
         </aside>
 
         <!-- Mobile Bottom Panel (Chat/Rank) -->
-        <div id="mobile-panel" class="order-2 lg:hidden bg-white border-t-[3px] border-ink flex flex-col transition-all duration-300 overflow-hidden relative z-20 shrink-0 h-[var(--mobile-panel-h)]">
+        <div id="mobile-panel" class="order-2 lg:hidden bg-white border-t-[3px] border-ink flex flex-col transition-all duration-500 overflow-hidden relative z-20 shrink-0 h-[var(--mobile-panel-h)] shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+            <!-- Sheet Handle Decoration -->
+            <div class="w-full flex justify-center py-2 shrink-0">
+                <div class="w-12 h-1.5 bg-gray-200 rounded-full border border-gray-100"></div>
+            </div>
+
             <!-- Rank View -->
-            <div id="view-rank" class="hidden flex-1 flex-col p-4 overflow-hidden h-full">
-                 <h2 class="font-black text-xl mb-3 border-b-2 border-ink pb-2 sticky top-0 bg-white z-10">Leaderboard 🏆</h2>
-                 <div id="player-list-mobile" class="space-y-3 overflow-y-auto flex-1 min-h-0"></div>
+            <div id="view-rank" class="hidden flex-1 flex-col px-4 pb-4 overflow-hidden h-full">
+                 <h2 class="font-black text-xl mb-3 border-b-2 border-ink pb-2 sticky top-0 bg-white z-10 flex items-center justify-between">
+                    <span class="flex items-center gap-2">🏆 LEADERBOARD</span>
+                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Live</span>
+                 </h2>
+                 <div id="player-list-mobile" class="space-y-3 overflow-y-auto flex-1 min-h-0 py-1"></div>
             </div>
             <!-- Chat View -->
             <div id="view-chat-mobile" class="hidden flex flex-col h-full overflow-hidden absolute inset-0 bg-white z-0">
@@ -302,30 +337,33 @@ $base_path = rtrim($scriptDir, '/') . '/';
                 <div id="chat-box-mobile" class="flex-1 overflow-y-auto p-3 space-y-2 flex flex-col-reverse chat-pattern bg-gray-50 overscroll-contain"></div>
                 
                 <!-- Fixed Input Area -->
-                <div class="p-2 border-t-2 border-ink bg-white shrink-0 z-10 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                <div class="p-4 border-t-2 border-ink bg-white shrink-0 z-10 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)]">
                      <form onsubmit="sendChatMobile(event)" class="relative flex gap-2">
                         <input type="text" id="chat-input-mobile"
-                            class="flex-1 w-0 border-2 border-gray-300 rounded-lg px-3 py-2 font-bold focus:border-ink focus:outline-none focus:shadow-[2px_2px_0px_#000] text-base"
-                            placeholder="Guess here..." autocomplete="off">
-                        <button type="submit" class="bg-pop-blue border-2 border-ink px-4 py-2 rounded-lg font-bold shadow-[2px_2px_0px_#000] active:shadow-none active:translate-y-0.5 text-sm shrink-0">SEND</button>
+                            class="flex-1 w-0 border-2 border-gray-200 rounded-2xl px-4 py-3 font-bold focus:border-ink focus:outline-none focus:ring-4 focus:ring-pop-blue/20 text-base"
+                            placeholder="Type your guess..." autocomplete="off">
+                        <button type="submit" class="bg-pop-blue border-2 border-ink px-6 py-3 rounded-2xl font-black shadow-[4px_4px_0px_#000] active:shadow-none active:translate-y-1 transition-all text-sm shrink-0 uppercase tracking-tight">SEND</button>
                      </form>
                 </div>
             </div>
         </div>
 
         <!-- Mobile Bottom Nav -->
-        <nav class="order-3 lg:hidden h-[var(--nav-h)] pb-[env(safe-area-inset-bottom)] bg-white border-t-[3px] border-ink flex items-stretch shrink-0 z-40 relative shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-            <button onclick="switchTab('rank')" id="tab-rank" class="flex-1 flex flex-col items-center justify-center gap-0.5 text-gray-400 hover:bg-gray-50 transition-all border-r border-gray-100">
-                <span class="text-xl grayscale opacity-50">🏆</span>
-                <span class="text-[9px] font-black uppercase tracking-wider">Rank</span>
+        <nav class="order-3 lg:hidden h-[var(--nav-h)] pb-[env(safe-area-inset-bottom)] bg-white border-t-[3px] border-ink flex items-stretch shrink-0 z-40 relative shadow-[0_-8px_20px_rgba(0,0,0,0.1)]">
+            <button onclick="switchTab('rank')" id="tab-rank" class="tab-btn flex-1 flex flex-col items-center justify-center gap-1 text-gray-400">
+                <span class="tab-icon text-2xl grayscale opacity-50 transition-all duration-300">🏆</span>
+                <span class="tab-label text-[10px] font-black uppercase tracking-widest opacity-60 transition-all duration-300">Players</span>
+                <div class="tab-indicator"></div>
             </button>
-            <button onclick="switchTab('draw')" id="tab-draw" class="flex-1 flex flex-col items-center justify-center gap-0.5 text-ink hover:bg-gray-50 transition-all bg-pop-yellow/10">
-                <span class="text-xl">✏️</span>
-                <span class="text-[9px] font-black uppercase tracking-wider">Canvas</span>
+            <button onclick="switchTab('draw')" id="tab-draw" class="tab-btn flex-1 flex flex-col items-center justify-center gap-1 text-gray-400">
+                <span class="tab-icon text-2xl grayscale opacity-50 transition-all duration-300">✏️</span>
+                <span class="tab-label text-[10px] font-black uppercase tracking-widest opacity-60 transition-all duration-300">Canvas</span>
+                <div class="tab-indicator"></div>
             </button>
-            <button onclick="switchTab('chat')" id="tab-chat" class="flex-1 flex flex-col items-center justify-center gap-0.5 text-gray-400 hover:bg-gray-50 transition-all border-l border-gray-100">
-                <span class="text-xl grayscale opacity-50">💬</span>
-                <span class="text-[9px] font-black uppercase tracking-wider">Chat</span>
+            <button onclick="switchTab('chat')" id="tab-chat" class="tab-btn flex-1 flex flex-col items-center justify-center gap-1 text-gray-400">
+                <span class="tab-icon text-2xl grayscale opacity-50 transition-all duration-300">💬</span>
+                <span class="tab-label text-[10px] font-black uppercase tracking-widest opacity-60 transition-all duration-300">Chat</span>
+                <div class="tab-indicator"></div>
             </button>
         </nav>
 
@@ -345,7 +383,7 @@ $base_path = rtrim($scriptDir, '/') . '/';
                 document.documentElement.style.setProperty('--mobile-panel-h', '0px');
              } else {
                 // If switching back to mobile and we were on rank/chat, restore height
-                if (typeof currentTab !== 'undefined' && currentTab !== 'draw') {
+                if (window.currentTab && window.currentTab !== 'draw') {
                     document.documentElement.style.setProperty('--mobile-panel-h', '50svh');
                 }
              }

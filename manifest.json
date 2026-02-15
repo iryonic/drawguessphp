@@ -1,5 +1,5 @@
 {
-    "name": "Draw & Guess Blitz",
+    "name": "Draw & Guess",
     "short_name": "DrawGuess",
     "description": "A real-time multiplayer drawing and guessing game.",
     "start_url": "index.php",

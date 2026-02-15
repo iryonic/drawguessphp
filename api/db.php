@@ -2,12 +2,13 @@
 // Prevent unwanted output
 ob_start();
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // Turn off HTML error reporting
+ini_set('display_errors', 1); // Enable error reporting for debugging
 
 // Database configuration
 $is_local = true;
 if (isset($_SERVER['HTTP_HOST'])) {
-    if ($_SERVER['HTTP_HOST'] !== 'localhost' && $_SERVER['HTTP_HOST'] !== '127.0.0.1') {
+    $hostname = explode(':', $_SERVER['HTTP_HOST'])[0];
+    if ($hostname !== 'localhost' && $hostname !== '127.0.0.1' && $hostname !== '::1') {
         $is_local = false;
     }
 }
@@ -28,7 +29,7 @@ if ($is_local) {
 
 
 // Connect to MySQL
-$conn = mysqli_connect($host, $user, $pass);
+$conn = @mysqli_connect($host, $user, $pass);
 
 if (!$conn) {
     ob_clean();
@@ -37,16 +38,19 @@ if (!$conn) {
 
 // Create database if not exists
 $db_check = mysqli_query($conn, "SHOW DATABASES LIKE '$db_name'");
-if (mysqli_num_rows($db_check) == 0) {
-    mysqli_query($conn, "CREATE DATABASE $db_name");
+if (!$db_check || mysqli_num_rows($db_check) == 0) {
+    mysqli_query($conn, "CREATE DATABASE IF NOT EXISTS $db_name");
 }
 
-mysqli_select_db($conn, $db_name);
+if (!mysqli_select_db($conn, $db_name)) {
+    ob_clean();
+    die(json_encode(["error" => "Failed to select database: " . mysqli_error($conn)]));
+}
 mysqli_set_charset($conn, "utf8mb4");
 
 // Auto-create tables if they don't exist (Robust Setup)
 $tbl_check = mysqli_query($conn, "SHOW TABLES LIKE 'rooms'");
-if (mysqli_num_rows($tbl_check) == 0) {
+if ($tbl_check && mysqli_num_rows($tbl_check) == 0) {
     // Rooms
     mysqli_query($conn, "CREATE TABLE IF NOT EXISTS rooms (
         id INT AUTO_INCREMENT PRIMARY KEY,

@@ -1,8 +1,8 @@
 <?php
 // Determine the dynamic base path securely
-$scriptDir = dirname($_SERVER['SCRIPT_NAME']);
-$scriptDir = str_replace('\\', '/', $scriptDir); // Normalize Windows paths
-$base_path = rtrim($scriptDir, '/') . '/';
+$scriptName = $_SERVER['SCRIPT_NAME'];
+$base_path = rtrim(str_replace('\\', '/', dirname($scriptName)), '/') . '/';
+if ($base_path == '/' || $base_path == '\\') $base_path = '/';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -16,7 +16,7 @@ $base_path = rtrim($scriptDir, '/') . '/';
     <title>Draw & Guess - Creative Drawing Party!</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="<?= $base_path ?>manifest.json">
     <meta name="theme-color" content="#facc15">
     <script>
         const APP_ROOT = '<?= $base_path ?>';
