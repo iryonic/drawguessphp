@@ -98,16 +98,16 @@ while($row = mysqli_fetch_assoc($res)) {
 
             <form method="POST" enctype="multipart/form-data" class="space-y-8">
                 <!-- Toggle -->
-                <div class="flex items-center justify-between p-4 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl group hover:border-ink transition-colors cursor-pointer" onclick="this.querySelector('input').click()">
+                <label class="flex items-center justify-between p-4 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl group hover:border-ink transition-colors cursor-pointer select-none">
                     <div>
                         <h3 class="font-black text-ink uppercase tracking-tight">Enable Lobby Music</h3>
                         <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-1">Plays during assembly & results</p>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
+                    <div class="relative inline-flex items-center">
                         <input type="checkbox" name="enabled" class="sr-only peer" <?= $settings['lobby_music_enabled'] == '1' ? 'checked' : '' ?>>
                         <div class="w-14 h-8 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-pop-blue border-2 border-ink"></div>
-                    </label>
-                </div>
+                    </div>
+                </label>
 
                 <!-- Upload -->
                 <div>

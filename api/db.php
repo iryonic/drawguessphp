@@ -169,6 +169,18 @@ if ($tbl_check && mysqli_num_rows($tbl_check) == 0) {
         FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
     )");
 
+    // Settings
+    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS settings (
+        setting_key VARCHAR(50) PRIMARY KEY,
+        setting_value TEXT
+    )");
+
+    // Seed Default Settings
+    mysqli_query($conn, "INSERT IGNORE INTO settings (setting_key, setting_value) VALUES 
+    ('lobby_music_enabled', '0'),
+    ('lobby_music_url', ''),
+    ('music_volume', '0.5')");
+
     // Seed Words
     mysqli_query($conn, "INSERT IGNORE INTO words (word, difficulty) VALUES 
     ('Cat', 'easy'), ('Sun', 'easy'), ('Apple', 'easy'), ('House', 'easy'), ('Tree', 'easy'),
