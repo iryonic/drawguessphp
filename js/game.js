@@ -4,6 +4,17 @@ const DEFAULT_MOBILE_PANEL_H = '50svh';
 window.currentTab = (window.innerWidth < MOBILE_BREAKPOINT) ? 'chat' : 'draw';
 let currentTab = window.currentTab;
 
+// Security Helper
+function escapeHTML(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 const player = JSON.parse(localStorage.getItem('dg_player') || '{}');
 if (!player.token) window.location.href = APP_ROOT || './';
 
@@ -21,6 +32,19 @@ const wordDisplay = document.getElementById('word-display');
 const timerEl = document.getElementById('timer');
 const timerProgress = document.getElementById('timer-progress');
 const turnNotif = document.getElementById('turn-notification');
+
+// Throttling Logic
+let isTabActive = true;
+document.addEventListener('visibilitychange', () => {
+    isTabActive = !document.hidden;
+});
+
+function canPoll(type) {
+    if (isTabActive) return true;
+    // When tab is hidden, only poll state every ~10 seconds (with random spread)
+    if (type === 'state') return Math.random() < 0.2;
+    return false; // Skip others
+}
 
 // Mobile Tabs
 const tabBtns = {
@@ -108,12 +132,27 @@ if (canvas) {
     });
 }
 
-// Polling
-setTimeout(syncState, 100); // Run immediately
-setInterval(syncState, 2000);
-setInterval(syncDraw, 200);
-setInterval(syncChat, 1000);
-setInterval(sendStrokes, 300);
+// Socket Initialization - DISABLED for Shared Hosting (Re-enable only if using VPS)
+const socket = null; // (typeof io !== 'undefined') ? io(SOCKET_URL) : null;
+/*
+if (socket) {
+    socket.on('connect', () => {
+        socket.emit('join_room', { token: player.token, roomCode: player.room_code });
+    });
+    socket.on('draw_stroke', (s) => strokeQueue.push(s));
+    socket.on('clear_canvas', () => strokeQueue.push({ color: 'CLEAR' }));
+    socket.on('undo', () => strokeQueue.push({ color: 'UNDO' }));
+    socket.on('reaction', (emoji) => showReaction(emoji));
+    socket.on('new_message', (m) => handleIncomingMessage(m));
+}
+*/
+
+// Polling - Optimized for Shared Hosting
+setTimeout(syncState, 100);
+setInterval(() => canPoll('state') && syncState(), 2000);
+setInterval(() => canPoll('draw') && syncDraw(), 400); // Faster polling for smoother drawing
+setInterval(() => canPoll('chat') && syncChat(), 1000);
+setInterval(() => canPoll('strokes') && sendStrokes(), 500);
 
 if (timerInterval) clearInterval(timerInterval);
 timerInterval = setInterval(updateLocalTimer, 1000);
@@ -306,7 +345,6 @@ function endDraw() {
 async function sendStrokes() {
     if (pointsBuffer.length === 0) return;
 
-    // Prevention of gaps: If existing buffer only has the carry-over point, don't resend
     if (painting && pointsBuffer.length === 1) return;
 
     const pointsToSend = pointsBuffer;
@@ -318,7 +356,6 @@ async function sendStrokes() {
         points: JSON.stringify(pointsToSend)
     };
 
-    // Critical Fix: Retain last point to bridge the gap to the next batch
     if (painting && pointsBuffer.length > 0) {
         const last = pointsBuffer[pointsBuffer.length - 1];
         pointsBuffer = [last];
@@ -492,10 +529,10 @@ async function syncState() {
 
                             const badge = w.difficulty == 'easy' ? '🟢' : (w.difficulty == 'medium' ? '🟡' : '🔴');
                             btn.innerHTML = `
-                                <span class="uppercase tracking-tight">${w.word}</span>
+                                <span class="uppercase tracking-tight">${escapeHTML(w.word)}</span>
                                 <div class="flex items-center gap-1.5 bg-gray-100 px-2 py-1 rounded-lg border-2 border-ink shadow-[2px_2px_0px_#000]">
                                     <span class="text-[10px] md:text-xs">${badge}</span>
-                                    <span class="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-gray-500">${w.difficulty}</span>
+                                    <span class="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-gray-500">${escapeHTML(w.difficulty)}</span>
                                 </div>
                             `;
                             btn.onclick = () => selectWord(w.id);
@@ -562,8 +599,8 @@ async function syncState() {
             if (overlaySubtitle) {
                 overlaySubtitle.innerHTML = `
                     <div class="mb-4">
-                        <div class="text-6xl mb-2 bounce-slow">${winner.avatar}</div>
-                        <div class="text-2xl font-black text-ink uppercase">${winner.username}</div>
+                        <div class="text-6xl mb-2 bounce-slow">${escapeHTML(winner.avatar)}</div>
+                        <div class="text-2xl font-black text-ink uppercase">${escapeHTML(winner.username)}</div>
                         <div class="text-lg font-mono font-bold text-pop-purple border-2 border-dashed border-pop-purple rounded-lg px-3 py-1 mt-2 inline-block bg-purple-50">${winner.score} PTS</div>
                     </div>
                     ${gameState.status === 'game_over' ? `<div class="text-xs font-extrabold text-gray-500 mt-8 uppercase tracking-widest animate-pulse">Restarting in ${timeLeft}s...</div>` : '<div class="text-xs font-bold text-gray-400 mt-8">Calculating results...</div>'}
@@ -630,10 +667,10 @@ function updatePlayers(players, drawerId) {
                 <div class="font-black text-gray-400 w-6 h-6 rounded-full flex items-center justify-center text-xs bg-gray-50 border border-gray-100 shrink-0">
                     ${rank}
                 </div>
-                <div class="text-3xl shrink-0 filter drop-shadow-sm group-hover:scale-110 transition-transform">${p.avatar}</div>
+                <div class="text-3xl shrink-0 filter drop-shadow-sm group-hover:scale-110 transition-transform">${escapeHTML(p.avatar)}</div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-1.5 mb-0.5">
-                        <span class="font-black text-ink truncate">${p.username}${isMe ? ' (You)' : ''}</span>
+                        <span class="font-black text-ink truncate">${escapeHTML(p.username)}${isMe ? ' (You)' : ''}</span>
                         ${isDrawer ? '<span class="animate-bounce-slow text-xs bg-pop-yellow border-2 border-ink px-1.5 py-0.5 rounded-full font-black text-[8px] uppercase tracking-tighter">Drawing</span>' : ''}
                     </div>
                     <div class="flex items-center gap-2">
@@ -753,8 +790,7 @@ function renderLoop() {
 }
 
 async function syncDraw() {
-    // If I'm drawing, skip fetch to avoid latency/double-draw, 
-    // UNLESS I just refreshed (ID=0), then I must fetch history.
+    // Initial fetch of history when first loading or round changes
     if (gameState.myTurn && gameState.status === 'drawing' && gameState.lastStrokeId > 0) return;
 
     if (gameState.status !== 'drawing' && gameState.status !== 'ended') return;
@@ -762,12 +798,9 @@ async function syncDraw() {
     try {
         const res = await (await fetch(`${APP_ROOT}api/draw_sync.php?token=${player.token}&action=fetch&last_id=${gameState.lastStrokeId}`)).json();
         if (res.data && res.data.strokes) {
-            // Sort just in case DB doesn't ensure order (id usually does)
             res.data.strokes.sort((a, b) => a.id - b.id);
-
             res.data.strokes.forEach(s => {
                 if (s.id > gameState.lastStrokeId) gameState.lastStrokeId = s.id;
-                // Add to queue for render loop
                 strokeQueue.push(s);
             });
             updatePersist();
@@ -775,73 +808,75 @@ async function syncDraw() {
     } catch (e) { }
 }
 
+function handleIncomingMessage(m) {
+    if (processedMsgIds.has(m.id)) return;
+    processedMsgIds.add(m.id);
+
+    if (m.id > gameState.lastMsgId) gameState.lastMsgId = m.id;
+
+    const username = m.username || 'System';
+
+    if (m.type === 'reaction') {
+        showReaction(m.message);
+        return;
+    }
+
+    const createMsg = () => {
+        const div = document.createElement('div');
+        div.className = "chat-msg transition-all duration-300";
+
+        if (m.type === 'guess' || m.is_system) {
+            if (m.type === 'guess') {
+                try {
+                    sfx.play('success');
+                    confetti({ particleCount: 60, spread: 50, origin: { y: 0.8 }, colors: ['#b9f6ca', '#facc15'] });
+                } catch (e) { }
+                div.className = "flex justify-center my-4 px-2 w-full";
+                div.innerHTML = `
+                    <div class="bg-pop-green border-2 border-ink px-4 py-2 rounded-xl shadow-[4px_4px_0px_#000] text-xs font-black uppercase text-center animate-bounce">
+                        🎉 ${escapeHTML(username)} discovered the word!
+                    </div>
+                `;
+            } else {
+                div.className = "flex justify-center my-2 px-2 w-full";
+                div.innerHTML = `
+                    <div class="bg-pop-yellow border-2 border-ink px-4 py-1.5 rounded-full shadow-[2px_2px_0px_#000] text-[10px] font-black uppercase tracking-tight">
+                        📢 ${escapeHTML(m.message)}
+                    </div>
+                `;
+            }
+        } else {
+            const isMe = m.player_id == player.id;
+            div.className = `flex flex-col mb-3 max-w-[90%] px-2 ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`;
+            div.innerHTML = `
+                <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 px-1">${escapeHTML(username)}</span>
+                <div class="px-4 py-2.5 rounded-2xl border-2 shadow-sm font-bold text-sm leading-snug 
+                    ${isMe ? 'bg-pop-blue border-ink text-black rounded-tr-none' : 'bg-white border-ink text-ink rounded-tl-none'}">
+                    ${escapeHTML(m.message)}
+                </div>
+            `;
+        }
+        return div;
+    };
+
+    // Add to standard chat boxes
+    const chatBoxDesktop = document.getElementById('chat-box');
+    const chatBoxMobile = document.getElementById('chat-box-mobile');
+    [chatBoxDesktop, chatBoxMobile].forEach(box => {
+        if (box) box.prepend(createMsg());
+    });
+
+    // MOBILE TOASTS: Floating chat over canvas
+    if (window.innerWidth < MOBILE_BREAKPOINT && currentTab !== 'chat') {
+        showToast(m);
+    }
+}
+
 async function syncChat() {
     try {
         const res = await (await fetch(`${APP_ROOT}api/chat.php?token=${player.token}&action=fetch&last_id=${gameState.lastMsgId}`)).json();
         if (res.data && res.data.messages) {
-            res.data.messages.forEach(m => {
-                if (processedMsgIds.has(m.id)) return;
-                processedMsgIds.add(m.id);
-
-                if (m.id > gameState.lastMsgId) gameState.lastMsgId = m.id;
-
-                const username = m.username || 'System';
-
-                if (m.type === 'reaction') {
-                    showReaction(m.message);
-                    return; // Don't add to chat scroll
-                }
-
-                const createMsg = () => {
-                    const div = document.createElement('div');
-                    div.className = "chat-msg transition-all duration-300";
-
-                    if (m.type === 'guess' || m.is_system) {
-                        if (m.type === 'guess') {
-                            try {
-                                sfx.play('success');
-                                confetti({ particleCount: 60, spread: 50, origin: { y: 0.8 }, colors: ['#b9f6ca', '#facc15'] });
-                            } catch (e) { }
-                            div.className = "flex justify-center my-4 px-2 w-full";
-                            div.innerHTML = `
-                                <div class="bg-pop-green border-2 border-ink px-4 py-2 rounded-xl shadow-[4px_4px_0px_#000] text-xs font-black uppercase text-center animate-bounce">
-                                    🎉 ${username} discovered the word!
-                                </div>
-                            `;
-                        } else {
-                            div.className = "flex justify-center my-2 px-2 w-full";
-                            div.innerHTML = `
-                                <div class="bg-pop-yellow border-2 border-ink px-4 py-1.5 rounded-full shadow-[2px_2px_0px_#000] text-[10px] font-black uppercase tracking-tight">
-                                    📢 ${m.message}
-                                </div>
-                            `;
-                        }
-                    } else {
-                        const isMe = m.player_id == player.id;
-                        div.className = `flex flex-col mb-3 max-w-[90%] px-2 ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`;
-                        div.innerHTML = `
-                            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 px-1">${username}</span>
-                            <div class="px-4 py-2.5 rounded-2xl border-2 shadow-sm font-bold text-sm leading-snug 
-                                ${isMe ? 'bg-pop-blue border-ink text-black rounded-tr-none' : 'bg-white border-ink text-ink rounded-tl-none'}">
-                                ${m.message}
-                            </div>
-                        `;
-                    }
-                    return div;
-                };
-
-                // Add to standard chat boxes
-                const chatBoxDesktop = document.getElementById('chat-box');
-                const chatBoxMobile = document.getElementById('chat-box-mobile');
-                [chatBoxDesktop, chatBoxMobile].forEach(box => {
-                    if (box) box.prepend(createMsg());
-                });
-
-                // MOBILE TOASTS: Floating chat over canvas
-                if (window.innerWidth < MOBILE_BREAKPOINT && currentTab !== 'chat') {
-                    showToast(m);
-                }
-            });
+            res.data.messages.forEach(handleIncomingMessage);
             updatePersist();
         }
     } catch (e) { }
@@ -859,15 +894,15 @@ function showToast(m) {
         toast.className = "backdrop-blur border-2 border-ink px-4 py-2 rounded-xl shadow-[4px_4px_0px_rgba(0,0,0,1)] text-xs font-black transition-all transform translate-y-2 opacity-0";
         if (m.type === 'guess') {
             toast.classList.add('bg-pop-green', 'text-black');
-            toast.innerHTML = `🎉 ${username} guessed correctly!`;
+            toast.innerHTML = `🎉 ${escapeHTML(username)} guessed correctly!`;
         } else {
             toast.classList.add('bg-pop-yellow', 'text-black');
-            toast.innerHTML = `${username} ${m.message}`;
+            toast.innerHTML = `${escapeHTML(username)} ${escapeHTML(m.message)}`;
         }
     }
     else {
         toast.className = "bg-white/95 backdrop-blur border-2 border-ink px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_#000] text-xs flex gap-1 transition-all transform translate-y-2 opacity-0";
-        toast.innerHTML = `<span class="font-black text-ink uppercase tracking-wide shrink-0">${username}:</span> <span class="text-gray-800 truncate">${m.message}</span>`;
+        toast.innerHTML = `<span class="font-black text-ink uppercase tracking-wide shrink-0">${escapeHTML(username)}:</span> <span class="text-gray-800 truncate">${escapeHTML(m.message)}</span>`;
     }
 
     toastContainer.appendChild(toast);
@@ -997,15 +1032,14 @@ window.sendChat = sendChat;
 window.sendChatMobile = sendChatMobile;
 
 async function sendReaction(emoji) {
-    // Optimistic local feedback sound
     try { sfx.play('pop'); } catch (e) { }
+    showReaction(emoji);
+
     await fetch(`${APP_ROOT}api/chat.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'reaction', emoji: emoji })
     });
-    // Immediately show locally too for better feel
-    showReaction(emoji);
 }
 
 function showReaction(emoji) {
@@ -1071,6 +1105,12 @@ function clearCanvasAction() {
     try { sfx.play('pop'); } catch (e) { }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     strokeHistory = [];
+
+    if (socket && socket.connected) {
+        socket.emit('clear_canvas');
+    }
+
+    // Still notify PHP for DB persistence
     fetch(`${APP_ROOT}api/draw_sync.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1080,7 +1120,6 @@ function clearCanvasAction() {
 
 function undoAction() {
     try { sfx.play('pop'); } catch (e) { }
-    // Local Optimistic Undo
     strokeHistory.pop();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const tempHistory = [...strokeHistory];
@@ -1089,6 +1128,10 @@ function undoAction() {
         if (oldS.type === 'dot') drawDot(oldS.x, oldS.y, oldS.color, oldS.size);
         else drawLine(oldS.x1, oldS.y1, oldS.x2, oldS.y2, oldS.color, oldS.size);
     });
+
+    if (socket && socket.connected) {
+        socket.emit('undo');
+    }
 
     fetch(`${APP_ROOT}api/draw_sync.php`, {
         method: 'POST',
