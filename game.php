@@ -183,10 +183,10 @@ if ($base_path == '/' || $base_path == '\\') $base_path = '/';
         </div>
 
         <!-- Center: Word/Status -->
-        <div class="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-24 md:w-64 text-center z-10 pointer-events-none">
-             <div class="bg-white border-2 border-ink rounded-lg md:rounded-xl px-1.5 py-0.5 md:py-1.5 shadow-[2px_2px_0px_#000] md:shadow-[3px_3px_0px_#000] relative overflow-hidden pointer-events-auto">
-                <div id="word-display" class="font-mono font-bold text-[10px] md:text-xl truncate leading-tight uppercase tracking-tight md:tracking-normal">WAITING</div>
-                <div class="absolute top-0 left-0 w-1 h-full bg-pop-pink"></div>
+        <div class="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-32 xs:w-40 md:w-80 text-center z-10 pointer-events-none">
+             <div class="bg-white border-2 border-ink rounded-lg md:rounded-2xl px-2 py-1 md:py-2 shadow-[2px_2px_0px_#000] md:shadow-[4px_4px_0px_#000] relative overflow-hidden pointer-events-auto">
+                <div id="word-display" class="font-mono font-black text-xs xs:text-sm md:text-2xl truncate leading-none uppercase tracking-widest">WAITING</div>
+                <div class="absolute top-0 left-0 w-1.5 h-full bg-pop-pink"></div>
              </div>
         </div>
 
@@ -251,10 +251,16 @@ if ($base_path == '/' || $base_path == '\\') $base_path = '/';
                 </div>
                 <!-- Size & Actions -->
                 <div class="flex items-center gap-1 md:gap-3 pl-2 md:pl-4 border-l-2 border-gray-100 shrink-0">
-                    <input type="range" min="2" max="40" value="5" id="brush-size" onchange="setSize(this.value)" 
-                        class="w-12 md:w-24 h-2 md:h-3 bg-gray-200 rounded-full appearance-none cursor-pointer accent-ink border border-gray-300">
-                    <button onclick="undoAction()" class="neo-btn p-1.5 md:p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs md:text-base" title="Undo Last Stroke">↩️</button>
-                    <button onclick="clearCanvasAction()" class="neo-btn p-1.5 md:p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs md:text-base" title="Clear Canvas">🗑️</button>
+                    <!-- Brush Preview -->
+                    <div class="hidden sm:flex w-8 md:w-10 h-8 md:h-10 items-center justify-center bg-gray-50 border border-gray-200 rounded-lg shrink-0 overflow-hidden">
+                        <div id="brush-preview" class="rounded-full bg-black" style="width: 5px; height: 5px;"></div>
+                    </div>
+                    <input type="range" min="2" max="40" value="5" id="brush-size" oninput="setSize(this.value)" 
+                        class="w-10 md:w-24 h-2 md:h-3 bg-gray-200 rounded-full appearance-none cursor-pointer accent-ink border border-gray-300">
+                    <div class="flex gap-1">
+                        <button onclick="undoAction()" class="neo-btn p-1.5 md:p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs md:text-base active:scale-90" title="Undo">↩️</button>
+                        <button onclick="clearCanvasAction()" class="neo-btn p-1.5 md:p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 text-xs md:text-base active:scale-90" title="Clear">🗑️</button>
+                    </div>
                 </div>
             </div>
 
@@ -276,12 +282,12 @@ if ($base_path == '/' || $base_path == '\\') $base_path = '/';
                       <div id="canvas-toasts" class="absolute top-4 left-4 right-4 z-40 pointer-events-none flex flex-col items-start gap-2"></div>
 
                       <!-- Game Overlay -->
-                      <div id="overlay" class="absolute inset-0 z-50 hidden flex flex-col items-center justify-center bg-white/95 backdrop-blur-md transition-opacity p-4">
-                         <div class="neo-border bg-white p-6 md:p-10 rounded-3xl shadow-2xl max-w-md w-full text-center flex flex-col items-center justify-center animate-in zoom-in duration-300">
-                             <h2 id="overlay-title" class="text-3xl md:text-5xl font-black mb-2 text-ink uppercase tracking-tight">WAITING</h2>
-                             <h3 id="overlay-subtitle" class="text-sm md:text-lg font-bold text-gray-500 mb-6 hidden">Starting soon...</h3>
+                      <div id="overlay" class="absolute inset-0 z-50 hidden flex flex-col items-center justify-center bg-white/95 backdrop-blur-md transition-opacity p-2 sm:p-4">
+                         <div class="neo-border bg-white p-5 md:p-10 rounded-[2rem] shadow-2xl max-w-lg w-[95%] text-center flex flex-col items-center justify-center animate-in zoom-in duration-300">
+                             <h2 id="overlay-title" class="text-2xl md:text-5xl font-black mb-1 md:mb-2 text-ink uppercase tracking-tight">WAITING</h2>
+                             <h3 id="overlay-subtitle" class="text-xs md:text-lg font-bold text-gray-500 mb-4 md:mb-6 hidden">Starting soon...</h3>
                              <!-- Word Selection -->
-                             <div id="word-selection" class="hidden grid grid-cols-1 gap-2 w-full mt-2"></div>
+                             <div id="word-selection" class="hidden flex flex-col gap-3 w-full mt-2 overflow-y-auto max-h-[50vh]"></div>
                              <!-- Start Button -->
                              <button id="start-btn" onclick="startGame()" class="hidden neo-btn w-full py-4 px-8 bg-pop-green text-xl font-black rounded-2xl hover:bg-green-300 mt-4 active:scale-95 transition-all">
                                  START GAME 🎮

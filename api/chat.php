@@ -89,9 +89,13 @@ if ($action === 'send') {
         // Bonus: "Close!" check (if off by 1-2 chars)
         $dist = levenshtein(strtolower(trim($msg)), strtolower($current_word));
         if ($dist <= 2 && $dist > 0 && strlen($current_word) > 3) {
-            $stmt = mysqli_prepare($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES (?, ?, ?, 'is so close!', 'system')");
-            mysqli_stmt_bind_param($stmt, "iii", $room_id, $round['id'], $player['id']);
-            mysqli_stmt_execute($stmt);
+            // Check if already close in last 5 messages to prevent spam
+            $spam_check = mysqli_query($conn, "SELECT id FROM messages WHERE room_id = $room_id AND player_id = {$player['id']} AND message = 'is so close!' AND created_at > DATE_SUB(NOW(), INTERVAL 10 SECOND)");
+            if (mysqli_num_rows($spam_check) === 0) {
+                $stmt = mysqli_prepare($conn, "INSERT INTO messages (room_id, round_id, player_id, message, type) VALUES (?, ?, ?, 'is so close!', 'system')");
+                mysqli_stmt_bind_param($stmt, "iii", $room_id, $round['id'], $player['id']);
+                mysqli_stmt_execute($stmt);
+            }
         }
     }
     

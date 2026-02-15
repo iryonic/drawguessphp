@@ -30,6 +30,7 @@ const tabBtns = {
 };
 
 // Game State Object
+let processedMsgIds = new Set();
 let gameState = {
     status: 'lobby',
     roundId: 0,
@@ -118,6 +119,7 @@ if (timerInterval) clearInterval(timerInterval);
 timerInterval = setInterval(updateLocalTimer, 1000);
 
 // --- Functions --- //
+updateBrushPreview();
 
 // --- Core Actions & UI Logic ---
 
@@ -362,6 +364,8 @@ async function syncState() {
         if (data.round.id != gameState.roundId) {
             if (data.round.id > 0 && data.round.id > gameState.roundId) {
                 gameState.lastStrokeId = 0;
+                gameState.lastMsgId = 0; // Reset message tracking for new round if needed
+                processedMsgIds.clear();
                 strokeHistory = [];
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 updatePersist();
@@ -477,10 +481,16 @@ async function syncState() {
                     if (options.length > 0 && wordSelect.children.length === 0) {
                         options.forEach(w => {
                             const btn = document.createElement('button');
-                            btn.className = "bg-pop-blue hover:bg-sky-300 border-2 border-ink px-6 py-4 rounded-xl text-black font-bold text-lg hover:scale-105 transition shadow-[4px_4px_0px_#000]";
-                            btn.textContent = `${w.word}`;
+                            btn.className = "bg-white hover:bg-pop-blue border-[3px] border-ink p-3 md:p-5 rounded-2xl md:rounded-3xl text-ink font-black text-base md:text-2xl hover:scale-[1.02] active:scale-95 transition-all shadow-[6px_6px_0px_#000] flex items-center justify-between";
+
                             const badge = w.difficulty == 'easy' ? '🟢' : (w.difficulty == 'medium' ? '🟡' : '🔴');
-                            btn.innerHTML += ` <span class="text-xs ml-2">${badge}</span>`;
+                            btn.innerHTML = `
+                                <span class="uppercase tracking-tight">${w.word}</span>
+                                <div class="flex items-center gap-1.5 bg-gray-100 px-2 py-1 rounded-lg border-2 border-ink shadow-[2px_2px_0px_#000]">
+                                    <span class="text-[10px] md:text-xs">${badge}</span>
+                                    <span class="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-gray-500">${w.difficulty}</span>
+                                </div>
+                            `;
                             btn.onclick = () => selectWord(w.id);
                             wordSelect.appendChild(btn);
                         });
@@ -751,6 +761,9 @@ async function syncChat() {
         const res = await (await fetch(`${APP_ROOT}api/chat.php?token=${player.token}&action=fetch&last_id=${gameState.lastMsgId}`)).json();
         if (res.data && res.data.messages) {
             res.data.messages.forEach(m => {
+                if (processedMsgIds.has(m.id)) return;
+                processedMsgIds.add(m.id);
+
                 if (m.id > gameState.lastMsgId) gameState.lastMsgId = m.id;
 
                 const username = m.username || 'System';
@@ -1003,13 +1016,38 @@ function setColor(c) {
 
     // Update active state in UI
     document.querySelectorAll('.color-dot').forEach(btn => {
-        btn.classList.remove('active');
-        // Simple check if color matches (converted to hex or rgb?)
-        // For simplicity we just assume click triggers this
+        btn.classList.toggle('ring-4', false);
+        btn.classList.toggle('ring-ink', false);
+        btn.classList.toggle('scale-110', false);
+
+        // Match by hex (assuming we use hex consistently in HTML too)
+        // or we can just rely on the onclick passing the color
     });
-    // Visual feedback is handled by onclick logic mostly, but we can enhance later
+
+    // The event target is the most reliable
+    if (window.event && window.event.currentTarget) {
+        const target = window.event.currentTarget;
+        if (target.classList.contains('color-dot')) {
+            target.classList.add('ring-4', 'ring-ink', 'scale-110');
+        }
+    }
+
+    updateBrushPreview();
 }
-function setSize(s) { gameState.size = s; }
+
+function setSize(s) {
+    gameState.size = s;
+    updateBrushPreview();
+}
+
+function updateBrushPreview() {
+    const preview = document.getElementById('brush-preview');
+    if (preview) {
+        preview.style.backgroundColor = gameState.color;
+        preview.style.width = gameState.size + 'px';
+        preview.style.height = gameState.size + 'px';
+    }
+}
 function clearCanvasAction() {
     try { sfx.play('pop'); } catch (e) { }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
