@@ -87,7 +87,7 @@
     <header class="h-[var(--header-h)] glass-header border-b-[3px] border-ink flex items-center justify-between px-3 md:px-8 shrink-0 z-50 relative gap-2">
         <!-- Logo & Room Code -->
         <div class="flex items-center gap-2 sm:gap-4 shrink-0">
-            <h1 class="hidden lg:block font-black text-2xl italic tracking-tighter transform -rotate-1 bg-pop-yellow px-3 py-1 border-[3px] border-ink shadow-[4px_4px_0px_#000] float-anim">DRAWGUESS v2</h1>
+            <h1 class="hidden lg:block font-black text-2xl italic tracking-tighter transform -rotate-1 bg-pop-yellow px-3 py-1 border-[3px] border-ink shadow-[4px_4px_0px_#000] float-anim">DRAWGUESS</h1>
             <div onclick="navigator.clipboard.writeText('<?= $room_code ?>')" class="flex items-center gap-2 md:gap-3 bg-white border-[2.5px] border-ink rounded-xl px-2.5 md:px-4 py-1.5 md:py-2 cursor-pointer hover:bg-pop-blue transition-all active:translate-y-1 active:shadow-none shadow-[3px_3px_0px_#000] group">
                 <span id="room-code-display" class="font-mono font-black text-sm md:text-xl tracking-widest uppercase"><?= $room_code ?></span>
             </div>
