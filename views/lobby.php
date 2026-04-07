@@ -59,7 +59,7 @@
         
         .avatar-tile { border: 3px solid #e5e7eb; min-width: 65px; min-height: 65px; display: flex; align-items: center; justify-content: center; font-size: 2rem; border-radius: 1.25rem; background: #fff; cursor: pointer; transition: all 0.2s; }
         .avatar-tile:hover { transform: scale(1.1); border-color: #1e1e1e; }
-        .avatar-tile.selected { border-color: #1e1e1e; background: #f8e599ff; box-shadow: 4px 4px 0px #1e1e1e; transform: translate(-2px, -2px); }
+        .avatar-tile.selected { border-color: #1e1e1e; background: #c1fbb4ff; box-shadow: 4px 4px 0px #1e1e1e; transform: translate(-2px, -2px); }
         .modal-bg { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(5px); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>

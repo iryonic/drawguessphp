@@ -22,7 +22,8 @@ define('IS_LOCAL', APP_ENV === 'local');
 
 // Determine the dynamic base path securely
 $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
-$base_path = '/';
+$base_path = null; // Start as null to track if we found it
+
 if ($scriptName) {
     foreach (['/api/', '/admin/'] as $dir) {
         if (($pos = strpos($scriptName, $dir)) !== false) {
@@ -30,10 +31,13 @@ if ($scriptName) {
             break;
         }
     }
-    if ($base_path === '/') {
-        $base_path = rtrim(dirname($scriptName), '/\\') . '/';
-    }
 }
+
+// Fallback if not in /api/ or /admin/
+if ($base_path === null) {
+    $base_path = rtrim(dirname($scriptName), '/\\') . '/';
+}
+
 define('APP_ROOT', ($base_path === '//') ? '/' : $base_path);
 
 // 3. Security Headers
