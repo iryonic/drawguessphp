@@ -267,27 +267,28 @@ function draw(e) {
     const pos = getNormalizedPos(e);
 
     // Advanced Local Smoothing (Live Interpolation)
+    const factorW = canvas.width / (window.devicePixelRatio || 1);
+    const factorH = canvas.height / (window.devicePixelRatio || 1);
+
     ctx.lineWidth = gameState.size;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = gameState.color;
-
-    // Use current resolution factor
-    const factorW = canvas.width / (window.devicePixelRatio || 1);
-    const factorH = canvas.height / (window.devicePixelRatio || 1);
 
     ctx.beginPath();
     ctx.moveTo(lastPos.x * factorW, lastPos.y * factorH);
     ctx.lineTo(pos.x * factorW, pos.y * factorH);
     ctx.stroke();
 
+    // Fix history before updating lastPos
+    strokeHistory.push({ type: 'line', x1: lastPos.x, y1: lastPos.y, x2: pos.x, y2: pos.y, color: gameState.color, size: gameState.size });
+
     lastPos = pos;
     pointsBuffer.push(pos);
-    strokeHistory.push({ type: 'line', x1: lastPos.x, y1: lastPos.y, x2: pos.x, y2: pos.y, color: gameState.color, size: gameState.size });
 
     // Throttle for server sync
     const now = Date.now();
-    if (pointsBuffer.length > 20 || (now - lastSendTime > 250)) {
+    if (pointsBuffer.length > 15 || (now - lastSendTime > 200)) {
         sendStrokes();
         lastSendTime = now;
     }
@@ -631,13 +632,15 @@ function renderLoop() {
             if (points.length === 1) {
                 // Dot
                 const p = points[0];
-                ctx.arc(p.x * canvas.width, p.y * canvas.height, s.size / 2, 0, Math.PI * 2);
+                const dpr = window.devicePixelRatio || 1;
+                ctx.arc(p.x * (canvas.width / dpr), p.y * (canvas.height / dpr), s.size / 2, 0, Math.PI * 2);
                 ctx.fill();
             } else {
                 // Smooth Line
                 ctx.lineWidth = s.size;
-                const w = canvas.width;
-                const h = canvas.height;
+                const dpr = window.devicePixelRatio || 1;
+                const w = canvas.width / dpr;
+                const h = canvas.height / dpr;
 
                 if (points.length > 2) {
                     // Quadratic Curve Interpolation for smoothness
@@ -1038,8 +1041,8 @@ window.leaveRoom = leaveRoom;
 updateBrushPreview();
 setTimeout(() => syncState(), 100);
 setInterval(() => canPoll('state') && syncState(), 1000);
-setInterval(() => canPoll('draw') && syncDraw(), 400); 
+setInterval(() => canPoll('draw') && syncDraw(), 250); 
 setInterval(() => canPoll('chat') && syncChat(), 1000);
-setInterval(() => canPoll('strokes') && sendStrokes(), 500);
+setInterval(() => canPoll('strokes') && sendStrokes(), 1000);
 if (timerInterval) clearInterval(timerInterval);
 timerInterval = setInterval(() => updateLocalTimer(), 1000);
