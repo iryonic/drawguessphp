@@ -131,11 +131,11 @@ if (!isset($settings['music_volume'])) $settings['music_volume'] = '0.3';
 
                 <!-- File Upload -->
                 <div class="p-6 border-2 border-ink border-dashed rounded-2xl bg-yellow-50/30 relative">
-                    <input type="file" name="music_file" accept=".mp3" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                    <input type="file" name="music_file" id="music_file" accept=".mp3" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="updateFileName(this)">
                     <div class="text-center group">
-                        <span class="text-4xl block mb-2 group-hover:scale-110 transition-transform">🎵</span>
-                        <p class="text-sm font-black text-ink uppercase">Upload MP3 Library</p>
-                        <p class="text-[9px] text-gray-400 font-bold uppercase mt-1">System Limit: <?= ini_get('upload_max_filesize') ?></p>
+                        <span id="upload-icon" class="text-4xl block mb-2 group-hover:scale-110 transition-transform">🎵</span>
+                        <p id="upload-label" class="text-sm font-black text-ink uppercase">Upload MP3 Library</p>
+                        <p id="upload-meta" class="text-[9px] text-gray-400 font-bold uppercase mt-1">System Limit: <?= ini_get('upload_max_filesize') ?></p>
                     </div>
                 </div>
 
@@ -165,5 +165,28 @@ if (!isset($settings['music_volume'])) $settings['music_volume'] = '0.3';
             </form>
         </div>
     </div>
+
+    <script>
+        function updateFileName(input) {
+            const label = document.getElementById('upload-label');
+            const icon = document.getElementById('upload-icon');
+            const meta = document.getElementById('upload-meta');
+            
+            if (input.files && input.files[0]) {
+                const name = input.files[0].name;
+                label.innerText = name;
+                label.classList.add('text-pop-blue');
+                icon.innerText = "📁";
+                meta.innerText = "READY TO UPLOAD";
+                meta.classList.add('text-green-500');
+            } else {
+                label.innerText = "Upload MP3 Library";
+                label.classList.remove('text-pop-blue');
+                icon.innerText = "🎵";
+                meta.innerText = "System Limit: <?= ini_get('upload_max_filesize') ?>";
+                meta.classList.remove('text-green-500');
+            }
+        }
+    </script>
 </body>
 </html>

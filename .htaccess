@@ -26,6 +26,7 @@ RewriteRule ^room/([A-Za-z0-9]+)/?$ index.php [QSA,L]
 # Admin Interface: Clean Routes
 RewriteRule ^admin/?$ admin/index.php [L]
 RewriteRule ^admin/login/?$ admin/login.php [L]
+RewriteRule ^admin/rooms/?$ admin/rooms.php [L]
 RewriteRule ^admin/words/?$ admin/words.php [L]
 RewriteRule ^admin/avatars/?$ admin/avatars.php [L]
 RewriteRule ^admin/music/?$ admin/music.php [L]

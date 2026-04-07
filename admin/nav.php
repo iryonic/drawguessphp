@@ -10,6 +10,7 @@
                 $current = basename($_SERVER['PHP_SELF']);
                 $links = [
                     'index.php' => ['Dashboard', 'admin'],
+                    'rooms.php' => ['Rooms', 'admin/rooms'],
                     'words.php' => ['Words', 'admin/words'],
                     'avatars.php' => ['Avatars', 'admin/avatars'],
                     'music.php' => ['Music', 'admin/music'],
@@ -27,6 +28,7 @@
             <div class="md:hidden">
                  <select onchange="window.location.href=this.value" class="bg-gray-100 border-2 border-ink text-[10px] font-black uppercase px-2 py-1 rounded-lg">
                      <option value="<?= APP_ROOT ?>admin" <?= $current=='index.php'?'selected':'' ?>>Dashboard</option>
+                     <option value="<?= APP_ROOT ?>admin/rooms" <?= $current=='rooms.php'?'selected':'' ?>>Rooms</option>
                      <option value="<?= APP_ROOT ?>admin/words" <?= $current=='words.php'?'selected':'' ?>>Words</option>
                      <option value="<?= APP_ROOT ?>admin/avatars" <?= $current=='avatars.php'?'selected':'' ?>>Avatars</option>
                      <option value="<?= APP_ROOT ?>admin/music" <?= $current=='music.php'?'selected':'' ?>>Music</option>

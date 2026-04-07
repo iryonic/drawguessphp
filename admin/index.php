@@ -63,34 +63,29 @@ $rooms = DB::fetchAll("
     <div class="container mx-auto px-4">
         
         <?php if(isset($msg)): ?>
-            <div class="bg-green-100 border-2 border-green-500 text-green-700 p-4 mb-8 rounded-xl font-bold flex items-center gap-3">
+            <div id="status-msg" class="bg-green-100 border-2 border-green-500 text-green-700 p-4 mb-8 rounded-xl font-bold flex items-center gap-3">
                 <span class="text-xl">✅</span> <?= htmlspecialchars($msg) ?>
             </div>
-        <?php endif; ?>
-
-        <?php if(isset($error)): ?>
-            <div class="bg-red-100 border-2 border-red-500 text-red-700 p-4 mb-8 rounded-xl font-bold flex items-center gap-3">
-                <span class="text-xl">❌</span> <?= htmlspecialchars($error) ?>
-            </div>
+            <script>setTimeout(() => document.getElementById('status-msg')?.remove(), 5000);</script>
         <?php endif; ?>
 
         <!-- Stats Overview -->
         <h2 class="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Platform Overview</h2>
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        <div id="stats-grid" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
             <div class="bg-white p-6 rounded-2xl border-2 border-ink shadow-[4px_4px_0px_#000]">
-                <div class="text-4xl font-black text-ink mb-1"><?= $total_rooms ?></div>
+                <div class="text-4xl font-black text-ink mb-1 stat-val" data-stat="rooms"><?= $total_rooms ?></div>
                 <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Rooms</div>
             </div>
             <div class="bg-white p-6 rounded-2xl border-2 border-ink shadow-[4px_4px_0px_#4fc3f7]">
-                <div class="text-4xl font-black text-pop-blue mb-1"><?= $active_rooms ?></div>
+                <div class="text-4xl font-black text-pop-blue mb-1 stat-val" data-stat="playing"><?= $active_rooms ?></div>
                 <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">In Progress</div>
             </div>
             <div class="bg-white p-6 rounded-2xl border-2 border-ink shadow-[4px_4px_0_#ff80ab]">
-                <div class="text-4xl font-black text-pop-pink mb-1"><?= $total_players ?></div>
+                <div class="text-4xl font-black text-pop-pink mb-1 stat-val" data-stat="players"><?= $total_players ?></div>
                 <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Global Players</div>
             </div>
             <div class="bg-white p-6 rounded-2xl border-2 border-ink shadow-[4px_4px_0_#ffeb3b]">
-                <div class="text-4xl font-black text-pop-yellow mb-1"><?= $total_words ?></div>
+                <div class="text-4xl font-black text-pop-yellow mb-1 stat-val" data-stat="words"><?= $total_words ?></div>
                 <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Vocabulary</div>
             </div>
         </div>
@@ -103,6 +98,7 @@ $rooms = DB::fetchAll("
                         <h2 class="text-xl font-black flex items-center gap-2 text-ink">
                             <span>🎮</span> Recent Activities
                         </h2>
+                        <a href="rooms.php" class="text-[10px] font-black text-pop-blue underline uppercase tracking-widest">Manage All</a>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left">
@@ -119,7 +115,7 @@ $rooms = DB::fetchAll("
                                 <?php foreach($rooms as $room): ?>
                                 <tr class="hover:bg-blue-50/30 transition-colors group">
                                     <td class="px-6 py-4">
-                                        <div class="font-mono font-bold text-ink bg-gray-100 px-2 py-1 rounded inline-block border border-gray-200"><?= htmlspecialchars($room['room_code']) ?></div>
+                                        <div class="font-mono font-bold text-ink bg-gray-100 px-2 py-1 rounded inline-block border border-gray-200 uppercase"><?= htmlspecialchars($room['room_code']) ?></div>
                                     </td>
                                     <td class="px-6 py-4">
                                         <?php if($room['status'] === 'playing'): ?>
@@ -136,7 +132,7 @@ $rooms = DB::fetchAll("
                                     <td class="px-6 py-4">
                                         <div class="text-[10px] font-black text-gray-400 uppercase mb-1">Round <?= $room['current_round'] ?> / <?= $room['max_rounds'] ?></div>
                                         <div class="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
-                                            <div class="h-full bg-pop-pink" style="width: <?= ($room['current_round'] / $room['max_rounds']) * 100 ?>%"></div>
+                                            <div class="h-full bg-pop-pink" style="width: <?= ($room['current_round'] / ($room['max_rounds'] ?: 1)) * 100 ?>%"></div>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase">
@@ -152,8 +148,26 @@ $rooms = DB::fetchAll("
 
             <!-- Maintenance & Sidebar -->
             <div class="space-y-6">
+                <!-- Word Metrics Chart -->
+                <div class="bg-white p-6 rounded-2xl border-2 border-ink shadow-[8px_8px_0px_#ce93d8]">
+                     <h2 class="text-sm font-black mb-4 uppercase tracking-widest text-gray-400">Word Distribution</h2>
+                     <canvas id="difficultyChart" height="200"></canvas>
+                     <div class="mt-4 pt-4 border-t border-gray-50 flex justify-around">
+                         <?php
+                            $diff_stats = DB::fetchAll("SELECT difficulty, COUNT(*) as c FROM words GROUP BY difficulty");
+                            foreach($diff_stats as $ds):
+                                $color = $ds['difficulty'] == 'easy' ? 'text-green-500' : ($ds['difficulty'] == 'medium' ? 'text-yellow-500' : 'text-red-500');
+                         ?>
+                             <div class="text-center">
+                                 <div class="text-xs font-black <?= $color ?>"><?= $ds['c'] ?></div>
+                                 <div class="text-[8px] font-bold text-gray-300 uppercase"><?= $ds['difficulty'] ?></div>
+                             </div>
+                         <?php endforeach; ?>
+                     </div>
+                </div>
+
                 <!-- Cleanup Card -->
-                <div class="bg-white p-8 rounded-2xl border-2 border-ink shadow-[8px_8px_0px_#ff8a80]">
+                <div class="bg-white p-6 rounded-2xl border-2 border-ink shadow-[8px_8px_0px_#ff8a80]">
                      <h2 class="text-xl font-black mb-1 flex items-center gap-2">🛠️ System</h2>
                      <p class="text-xs text-gray-400 font-bold uppercase tracking-tight mb-6">Database Management</p>
                      
@@ -161,36 +175,61 @@ $rooms = DB::fetchAll("
                          <input type="hidden" name="csrf_token" value="<?= getCSRFToken() ?>">
                          <div class="p-4 bg-red-50 border-2 border-dashed border-red-100 rounded-xl mb-4">
                              <p class="text-xs font-bold text-red-700 leading-snug">
-                                Running cleanup will permanently delete all inactive rooms older than 24 hours.
+                                Cleanup will remove all rooms older than 24h.
                              </p>
                          </div>
-                         <button type="submit" name="cleanup" class="w-full bg-pop-red hover:bg-red-400 border-2 border-ink text-ink font-black py-4 rounded-xl text-sm shadow-[4px_4px_0px_#000] active:shadow-none active:translate-y-1 transition-all">
-                            CLEAN OLD ROOMS
+                         <button type="submit" name="cleanup" class="w-full bg-pop-red hover:bg-red-400 border-2 border-ink text-ink font-black py-4 rounded-xl text-sm shadow-[4px_4px_0px_#000] active:translate-y-1 transition-all">
+                            CLEANUP DB
                          </button>
                      </form>
-                </div>
-
-                <!-- Database Info -->
-                <div class="bg-white p-6 rounded-2xl border-2 border-ink shadow-[8px_8px_0px_#ce93d8]">
-                     <h2 class="text-lg font-black mb-4">📖 Word Quick Stats</h2>
-                     <div class="space-y-3">
-                         <?php
-                            $diff_stats = DB::fetchAll("SELECT difficulty, COUNT(*) as c FROM words GROUP BY difficulty");
-                            foreach($diff_stats as $ds):
-                                $color = $ds['difficulty'] == 'easy' ? 'bg-green-400' : ($ds['difficulty'] == 'medium' ? 'bg-yellow-400' : 'bg-red-400');
-                         ?>
-                         <div class="flex items-center justify-between p-3 bg-gray-50 border-2 border-gray-100 rounded-xl">
-                             <div class="flex items-center gap-2">
-                                 <div class="w-2 h-2 rounded-full <?= $color ?>"></div>
-                                 <span class="text-xs font-black uppercase text-gray-500 tracking-tight"><?= htmlspecialchars($ds['difficulty']) ?></span>
-                             </div>
-                             <span class="text-sm font-black text-ink"><?= $ds['c'] ?></span>
-                         </div>
-                         <?php endforeach; ?>
-                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Chart.js & Real-time Update -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // 1. Difficulty Chart
+        const ctx = document.getElementById('difficultyChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Easy', 'Medium', 'Hard'],
+                datasets: [{
+                    data: [
+                        <?= DB::fetch("SELECT COUNT(*) as c FROM words WHERE difficulty='easy'")['c'] ?>,
+                        <?= DB::fetch("SELECT COUNT(*) as c FROM words WHERE difficulty='medium'")['c'] ?>,
+                        <?= DB::fetch("SELECT COUNT(*) as c FROM words WHERE difficulty='hard'")['c'] ?>
+                    ],
+                    backgroundColor: ['#b9f6ca', '#fff59d', '#ff8a80'],
+                    borderColor: '#1e1e1e',
+                    borderWidth: 2
+                }]
+            },
+            options: { cutout: '70%', plugins: { legend: { display: false } } }
+        });
+
+        // 2. Real-time Refresh Simulation
+        setInterval(async () => {
+            try {
+                // Self-request to get updated data (using a silent query)
+                const res = await fetch(window.location.href);
+                const html = await res.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                document.querySelectorAll('.stat-val').forEach(el => {
+                    const key = el.dataset.stat;
+                    const newVal = doc.querySelector(`.stat-val[data-stat="${key}"]`).innerText;
+                    if (el.innerText !== newVal) {
+                        el.innerText = newVal;
+                        el.closest('div').classList.add('animate-bounce');
+                        setTimeout(() => el.closest('div').classList.remove('animate-bounce'), 1000);
+                    }
+                });
+            } catch (e) { }
+        }, 30000); // Every 30s
+    </script>
 </body>
 </html>
