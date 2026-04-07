@@ -1,4 +1,4 @@
-const CACHE_NAME = 'draw-guess-v1';
+const CACHE_NAME = 'draw-guess-v12_NUCLEAR';
 const ASSETS = [
     './',
     'manifest.json',
@@ -7,25 +7,49 @@ const ASSETS = [
 
 self.addEventListener('install', event => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+        caches.open(CACHE_NAME).then(async cache => {
+            console.log('SW: Pre-caching assets');
+            for (const url of ASSETS) {
+                try {
+                    const response = await fetch(url, { redirect: 'follow' });
+                    if (!response.ok) throw new Error(`Fetch failed for ${url} with status ${response.status}`);
+                    await cache.put(url, response);
+                } catch (err) {
+                    console.error('SW: Failed to cache:', url, err);
+                }
+            }
+        })
     );
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys().then(keys => {
+            return Promise.all(keys.map(key => {
+                if (key !== CACHE_NAME) return caches.delete(key);
+            }));
+        })
+    );
+    self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {
-    // Skip API calls and non-GET requests
-    if (event.request.url.includes('/api/') || event.request.method !== 'GET') {
+    if (event.request.method !== 'GET' || 
+        event.request.url.includes('/api/') || 
+        !event.request.url.startsWith('http')) {
         return;
     }
 
     event.respondWith(
-        fetch(event.request).catch(async () => {
-            const cache = await caches.open(CACHE_NAME);
-            const cachedResponse = await cache.match(event.request);
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-            // If both network and cache fail, throw error so it bubbles up correctly
-            throw new Error('Not found in network or cache');
-        })
+        fetch(event.request)
+            .then(response => {
+                if (response.status === 200) {
+                    const resClone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, resClone));
+                }
+                return response;
+            })
+            .catch(() => caches.match(event.request))
     );
 });

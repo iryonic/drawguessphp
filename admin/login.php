@@ -51,13 +51,15 @@ if (isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true) {
         <?php endif; ?>
 
         <form method="POST" action="" class="space-y-6">
+            <input type="hidden" name="login_action" value="1">
+            <input type="hidden" name="csrf_token" value="<?= getCSRFToken() ?>">
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Identity</label>
-                <input type="text" name="username" placeholder="Username" class="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-ink focus:outline-none focus:shadow-[4px_4px_0px_#000] transition-all bg-gray-50/50" autofocus>
+                <input type="text" name="username" placeholder="Username" class="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-ink focus:outline-none focus:shadow-[4px_4px_0px_#000] transition-all bg-gray-50/50" required autofocus>
             </div>
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Secret</label>
-                <input type="password" name="password" placeholder="••••••••" class="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-ink focus:outline-none focus:shadow-[4px_4px_0px_#000] transition-all bg-gray-50/50">
+                <input type="password" name="password" placeholder="••••••••" class="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-ink focus:outline-none focus:shadow-[4px_4px_0px_#000] transition-all bg-gray-50/50" required>
             </div>
             
             <button type="submit" class="w-full bg-ink text-white font-black py-4 rounded-2xl border-2 border-ink hover:bg-gray-800 active:translate-y-1 active:shadow-none transition-all shadow-[6px_6px_0px_#ccc]">

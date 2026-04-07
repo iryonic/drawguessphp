@@ -1,111 +1,125 @@
 <?php
+/**
+ * Room Management API
+ * Refactored to use PDO and Prepared Statements.
+ */
 require_once 'db.php';
 
 $action = $_POST['action'] ?? '';
 
 if ($action === 'create') {
-    $username = sanitize($conn, $_POST['username'] ?? 'Player');
-    $avatar = sanitize($conn, $_POST['avatar'] ?? '🐱');
+    // 1. Validation
+    $username = trim($_POST['username'] ?? '');
+    if (empty($username)) jsonResponse(['error' => 'Username is required'], false);
     
-    // Generate Room Code
-    $room_code = strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 5));
-    // Ensure unique (simple retry once)
-    $check = mysqli_query($conn, "SELECT id FROM rooms WHERE room_code = '$room_code'");
-    if (mysqli_num_rows($check) > 0) {
-        $room_code = strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 5));
-    }
-
+    $avatar = $_POST['avatar'] ?? '🐱';
     $max_rounds = intval($_POST['max_rounds'] ?? 3);
     $round_duration = intval($_POST['round_duration'] ?? 60);
 
-    // Create Room
-    $sql = "INSERT INTO rooms (room_code, status, max_rounds, round_duration) VALUES ('$room_code', 'lobby', $max_rounds, $round_duration)";
-    if (mysqli_query($conn, $sql)) {
-        $room_id = mysqli_insert_id($conn);
-        
-        // Add Host Player
-        $token = bin2hex(random_bytes(16));
-        $player_sql = "INSERT INTO players (room_id, username, avatar, is_host, session_token) 
-                       VALUES ('$room_id', '$username', '$avatar', 1, '$token')";
-        
-        if (mysqli_query($conn, $player_sql)) {
-            $player_id = mysqli_insert_id($conn);
-            
-            // Update room host_id
-            mysqli_query($conn, "UPDATE rooms SET host_id = $player_id WHERE id = $room_id");
+    // 2. Generate Unique Room Code
+    do {
+        $room_code = strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 5));
+        $exists = DB::fetch("SELECT id FROM rooms WHERE room_code = ?", [$room_code]);
+    } while ($exists);
 
-            jsonResponse([
-                'room_id' => $room_id,
-                'room_code' => $room_code,
-                'player_id' => $player_id,
-                'username' => $username,
-                'avatar' => $avatar,
-                'is_host' => true,
-                'token' => $token
-            ]);
-        }
-    }
-    jsonResponse(['error' => 'Failed to create room'], false);
+    // 3. Create Room
+    $room_id = DB::insert('rooms', [
+        'room_code' => $room_code,
+        'status' => 'lobby',
+        'max_rounds' => $max_rounds,
+        'round_duration' => $round_duration
+    ]);
+
+    // 4. Create Host Player
+    $token = bin2hex(random_bytes(16));
+    $player_id = DB::insert('players', [
+        'room_id' => $room_id,
+        'username' => $username,
+        'avatar' => $avatar,
+        'is_host' => 1,
+        'session_token' => $token
+    ]);
+
+    // 5. Link Host to Room
+    DB::query("UPDATE rooms SET host_id = ? WHERE id = ?", [$player_id, $room_id]);
+
+    jsonResponse([
+        'room_id' => $room_id,
+        'room_code' => $room_code,
+        'player_id' => $player_id,
+        'username' => $username,
+        'avatar' => $avatar,
+        'is_host' => true,
+        'token' => $token
+    ]);
 
 } elseif ($action === 'join') {
-    $username = sanitize($conn, $_POST['username'] ?? '');
-    $room_code = sanitize($conn, $_POST['room_code'] ?? '');
-    $avatar = sanitize($conn, $_POST['avatar'] ?? '🐱');
+    $username = trim($_POST['username'] ?? '');
+    $room_code = strtoupper(trim($_POST['room_code'] ?? ''));
+    $avatar = $_POST['avatar'] ?? '🐱';
 
-    // Find Room
-    $res = mysqli_query($conn, "SELECT id, status FROM rooms WHERE room_code = '$room_code'");
-    if (mysqli_num_rows($res) === 0) {
+    if (empty($username) || empty($room_code)) {
+        jsonResponse(['error' => 'Username and Room Code are required'], false);
+    }
+
+    // 1. Find Room
+    $room = DB::fetch("SELECT id, status FROM rooms WHERE room_code = ?", [$room_code]);
+    if (!$room) {
         jsonResponse(['error' => 'Room not found'], false);
     }
-    $room = mysqli_fetch_assoc($res);
 
     if ($room['status'] !== 'lobby') {
-        // Allow re-join if token matches? Not handled here yet.
         jsonResponse(['error' => 'Game already in progress'], false);
     }
 
-    // Check username uniqueness
-    $u_check = mysqli_query($conn, "SELECT id FROM players WHERE room_id = {$room['id']} AND username = '$username'");
-    if (mysqli_num_rows($u_check) > 0) {
+    // 2. Check Uniqueness
+    $conflict = DB::fetch("SELECT id FROM players WHERE room_id = ? AND username = ?", [$room['id'], $username]);
+    if ($conflict) {
         jsonResponse(['error' => 'Username taken in this room'], false);
     }
 
-    // Add Player
+    // 3. Add Player
     $token = bin2hex(random_bytes(16));
-    $sql = "INSERT INTO players (room_id, username, avatar, is_host, session_token) 
-            VALUES ('{$room['id']}', '$username', '$avatar', 0, '$token')";
-    
-    if (mysqli_query($conn, $sql)) {
-        $pid = mysqli_insert_id($conn);
-        $uname = mysqli_real_escape_string($conn, $username);
-        mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ({$room['id']}, 0, '$uname joined the room', 'system')");
+    $pid = DB::insert('players', [
+        'room_id' => $room['id'],
+        'username' => $username,
+        'avatar' => $avatar,
+        'is_host' => 0,
+        'session_token' => $token
+    ]);
 
-        jsonResponse([
-            'room_id' => $room['id'],
-            'room_code' => $room_code,
-            'player_id' => $pid,
-            'username' => $username,
-            'avatar' => $avatar,
-            'is_host' => false,
-            'token' => $token
-        ]);
-    } else {
-        jsonResponse(['error' => 'Failed to join room: ' . mysqli_error($conn)], false);
-    }
+    // 4. System Message
+    DB::insert('messages', [
+        'room_id' => $room['id'],
+        'message' => "$username joined the room",
+        'type' => 'system'
+    ]);
+
+    jsonResponse([
+        'room_id' => $room['id'],
+        'room_code' => $room_code,
+        'player_id' => $pid,
+        'username' => $username,
+        'avatar' => $avatar,
+        'is_host' => false,
+        'token' => $token
+    ]);
+
 } elseif ($action === 'leave') {
-    $token = sanitize($conn, $_POST['token'] ?? '');
-    $res = mysqli_query($conn, "SELECT id, room_id, username FROM players WHERE session_token = '$token'");
-    if ($row = mysqli_fetch_assoc($res)) {
-        $pid = $row['id'];
-        $rid = $row['room_id'];
-        $uname = mysqli_real_escape_string($conn, $row['username']);
-        
-        mysqli_query($conn, "DELETE FROM players WHERE id = $pid");
-        mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($rid, 0, '$uname left the room', 'system')");
+    $token = $_POST['token'] ?? '';
+    $player = DB::fetch("SELECT id, room_id, username FROM players WHERE session_token = ?", [$token]);
+    
+    if ($player) {
+        DB::query("DELETE FROM players WHERE id = ?", [$player['id']]);
+        DB::insert('messages', [
+            'room_id' => $player['room_id'],
+            'message' => "{$player['username']} left the room",
+            'type' => 'system'
+        ]);
         jsonResponse(['success' => true]);
     }
     jsonResponse(['error' => 'Not found'], false);
+
 } else {
     jsonResponse(['error' => 'Invalid action'], false);
 }
-?>

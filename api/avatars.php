@@ -1,12 +1,20 @@
 <?php
+/**
+ * Avatar List API
+ * Re-engineered to PDO for security and modern architecture.
+ */
 require_once 'db.php';
 
-// Fetch Avatars
-$q = mysqli_query($conn, "SELECT emoji FROM avatars ORDER BY id ASC");
-$avatars = [];
-while ($row = mysqli_fetch_assoc($q)) {
-    $avatars[] = $row['emoji'];
+// Try to fetch from DB, fallback to hardcoded list if empty
+try {
+    $avatars = DB::fetchAll("SELECT emoji FROM avatars ORDER BY id ASC");
+    $list = array_column($avatars, 'emoji');
+} catch (Exception $e) {
+    $list = [];
 }
 
-jsonResponse($avatars);
-?>
+if (empty($list)) {
+    $list = ['🐱', '🐶', '🦁', '🦊', '🐸', '🐼', '🐨', '🐷', '🐧', '🦄', '🐲', '🐙', '🦖', '🤖', '👻', '🤡'];
+}
+
+jsonResponse($list);

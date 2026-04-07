@@ -1,6 +1,6 @@
 // --- Layout Constants & Global State ---
 const MOBILE_BREAKPOINT = 1024;
-const DEFAULT_MOBILE_PANEL_H = '50svh';
+const DEFAULT_MOBILE_PANEL_H = '85vh';
 window.currentTab = (window.innerWidth < MOBILE_BREAKPOINT) ? 'chat' : 'draw';
 let currentTab = window.currentTab;
 
@@ -16,22 +16,54 @@ function escapeHTML(str) {
 }
 
 const player = JSON.parse(localStorage.getItem('dg_player') || '{}');
-if (!player.token) window.location.href = APP_ROOT || './';
 
-// UI Elements
-const roomCodeDisplay = document.getElementById('room-code-display');
-const playerList = document.getElementById('player-list');
-const canvas = document.getElementById('game-canvas');
+// Recovery: Check URL for room code and compare with session
+const urlParams = window.location.pathname.split('/');
+const urlRoom = urlParams[urlParams.length - 1];
+
+if (urlRoom && player.room_code !== urlRoom.toUpperCase()) {
+    console.warn("Room Mismatch: URL says " + urlRoom + " but session is " + player.room_code);
+    // If mismatch, try to reload but don't force redirect yet, syncState will handle 401
+}
+
+if (!player.token && !urlRoom) {
+    window.location.href = APP_ROOT || './';
+}
+
+// Fail-safe for SFX engine (prevents crashes if sounds.js fails)
+if (typeof sfx === 'undefined') {
+    window.sfx = { 
+        play: () => {}, playBGM: () => {}, stopBGM: () => {}, 
+        getBGMStatus: () => false, toggleBGM: () => false 
+    };
+}
+
+// Global scope initialization for HTML event handlers (CRITICAL TOP-LEVEL)
+// (Functions will be mapped to window at the bottom of the file)
+
+// UI Element Cache with Lazy Hooks
+const getEl = (id) => document.getElementById(id);
+const ui = {
+    get roomCode() { return getEl('room-code-display'); },
+    get players() { return getEl('player-list'); },
+    get canvas() { return getEl('game-canvas'); },
+    get overlay() { return getEl('overlay'); },
+    get overlayTitle() { return getEl('overlay-title'); },
+    get overlaySubtitle() { return getEl('overlay-subtitle'); },
+    get wordSelect() { return getEl('word-selection'); },
+    get startBtn() { return getEl('start-btn'); },
+    get wordDisplay() { return getEl('word-display'); },
+    get timer() { return getEl('timer'); },
+    get timerProgress() { return getEl('timer-progress'); },
+    get turnNotif() { return getEl('turn-notification'); },
+    get floatingHud() { return getEl('floating-word-hud'); },
+    get reactionBar() { return getEl('reaction-bar'); },
+    get chatBox() { return getEl('chat-box') || getEl('chat-box-mobile'); },
+    get chatInput() { return getEl('chat-input') || getEl('chat-input-mobile'); }
+};
+
+const canvas = ui.canvas;
 const ctx = canvas ? canvas.getContext('2d') : null;
-const overlay = document.getElementById('overlay');
-const overlayTitle = document.getElementById('overlay-title');
-const overlaySubtitle = document.getElementById('overlay-subtitle');
-const wordSelect = document.getElementById('word-selection');
-const startBtn = document.getElementById('start-btn');
-const wordDisplay = document.getElementById('word-display');
-const timerEl = document.getElementById('timer');
-const timerProgress = document.getElementById('timer-progress');
-const turnNotif = document.getElementById('turn-notification');
 
 // Throttling Logic
 let isTabActive = true;
@@ -41,16 +73,15 @@ document.addEventListener('visibilitychange', () => {
 
 function canPoll(type) {
     if (isTabActive) return true;
-    // When tab is hidden, only poll state every ~10 seconds (with random spread)
     if (type === 'state') return Math.random() < 0.2;
-    return false; // Skip others
+    return false;
 }
 
 // Mobile Tabs
 const tabBtns = {
-    draw: document.getElementById('tab-draw'),
-    chat: document.getElementById('tab-chat'),
-    rank: document.getElementById('tab-rank')
+    draw: getEl('tab-draw'),
+    chat: getEl('tab-chat'),
+    rank: getEl('tab-rank')
 };
 
 // Game State Object
@@ -62,7 +93,7 @@ let gameState = {
     lastMsgId: 0,
     isDrawer: false,
     color: '#000000',
-    size: 5,
+    size: (window.innerWidth < 1024) ? 3 : 5,
     myTurn: false,
     endTime: 0,
     totalTime: 60
@@ -70,7 +101,6 @@ let gameState = {
 
 // Game Persist Logic
 function updatePersist() {
-    // Optionally save state to session storage if needed for tab recovery
     sessionStorage.setItem('dg_lastStrokeId', gameState.lastStrokeId);
     sessionStorage.setItem('dg_lastMsgId', gameState.lastMsgId);
 }
@@ -84,190 +114,104 @@ let lastSendTime = 0;
 let timerInterval = null;
 
 // --- Initialization ---
-if (roomCodeDisplay) roomCodeDisplay.innerText = player.room_code || '????';
+if (ui.roomCode) ui.roomCode.innerText = player.room_code || '????';
 
 function resizeCanvas() {
-    const container = document.getElementById('canvas-container');
+    if (!canvas) return;
+    const container = getEl('canvas-container');
     if (!container) return;
-    const wrapper = container.querySelector('.neo-border');
-    if (!wrapper) return;
-    canvas.width = wrapper.clientWidth;
-    canvas.height = wrapper.clientHeight;
-    if (typeof gameState !== 'undefined') gameState.lastStrokeId = 0;
+    const wrapper = container.querySelector('.isolate') || container;
+    
+    const dpr = window.devicePixelRatio || 1;
+    const w = wrapper.clientWidth;
+    const h = wrapper.clientHeight;
+    
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    
+    if (ctx) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+    }
+
+    gameState.lastStrokeId = 0;
     if (typeof syncDraw === 'function') syncDraw();
 }
 
 window.addEventListener('resize', resizeCanvas);
-if (canvas) setTimeout(resizeCanvas, 300);
-
-
-// ... (lines 80-211 skipped) ...
-
-
-// Listeners
 if (canvas) {
+    setTimeout(resizeCanvas, 300);
+    
+    // Bind Drawing Events
     canvas.addEventListener('mousedown', startDraw);
     canvas.addEventListener('mousemove', draw);
     canvas.addEventListener('mouseup', endDraw);
     canvas.addEventListener('mouseleave', endDraw);
 
-    canvas.addEventListener('touchstart', (e) => {
-        e.preventDefault();
+    canvas.addEventListener('touchstart', (e) => { 
+        if (gameState.myTurn) e.preventDefault(); 
         const touch = e.touches[0];
-        const mouseEvent = new MouseEvent("mousedown", { clientX: touch.clientX, clientY: touch.clientY });
-        canvas.dispatchEvent(mouseEvent);
+        startDraw({ clientX: touch.clientX, clientY: touch.clientY }); 
     }, { passive: false });
 
-    canvas.addEventListener('touchmove', (e) => {
-        e.preventDefault();
+    canvas.addEventListener('touchmove', (e) => { 
+        if (gameState.myTurn) e.preventDefault(); 
         const touch = e.touches[0];
-        const mouseEvent = new MouseEvent("mousemove", { clientX: touch.clientX, clientY: touch.clientY });
-        canvas.dispatchEvent(mouseEvent);
+        draw({ clientX: touch.clientX, clientY: touch.clientY }); 
     }, { passive: false });
 
-    canvas.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        const mouseEvent = new MouseEvent("mouseup", {});
-        canvas.dispatchEvent(mouseEvent);
-    });
+    canvas.addEventListener('touchend', endDraw);
 }
 
-// Socket Initialization - DISABLED for Shared Hosting (Re-enable only if using VPS)
-const socket = null; // (typeof io !== 'undefined') ? io(SOCKET_URL) : null;
-/*
-if (socket) {
-    socket.on('connect', () => {
-        socket.emit('join_room', { token: player.token, roomCode: player.room_code });
-    });
-    socket.on('draw_stroke', (s) => strokeQueue.push(s));
-    socket.on('clear_canvas', () => strokeQueue.push({ color: 'CLEAR' }));
-    socket.on('undo', () => strokeQueue.push({ color: 'UNDO' }));
-    socket.on('reaction', (emoji) => showReaction(emoji));
-    socket.on('new_message', (m) => handleIncomingMessage(m));
-}
-*/
-
-// Polling - Optimized for Shared Hosting
-setTimeout(syncState, 100);
-setInterval(() => canPoll('state') && syncState(), 2000);
-setInterval(() => canPoll('draw') && syncDraw(), 400); // Faster polling for smoother drawing
-setInterval(() => canPoll('chat') && syncChat(), 1000);
-setInterval(() => canPoll('strokes') && sendStrokes(), 500);
-
-if (timerInterval) clearInterval(timerInterval);
-timerInterval = setInterval(updateLocalTimer, 1000);
+// (Polling and engine start moved to bottom)
 
 // --- Functions --- //
 updateBrushPreview();
 
 // --- Core Actions & UI Logic ---
 
-function switchTab(tab) {
-    if (window.innerWidth >= MOBILE_BREAKPOINT) return;
-    currentTab = window.currentTab = tab;
-
-    const tabs = {
-        rank: document.getElementById('tab-rank'),
-        draw: document.getElementById('tab-draw'),
-        chat: document.getElementById('tab-chat')
-    };
-
-    const views = {
-        rank: document.getElementById('view-rank'),
-        chat: document.getElementById('view-chat-mobile')
-    };
-
-    // 1. Update Tab Buttons
-    Object.keys(tabs).forEach(k => {
-        const t = tabs[k];
-        if (!t) return;
-        t.classList.toggle('active', k === tab);
-    });
-
-    // 2. Handle Views with smooth height change
-    if (tab === 'draw') {
-        document.documentElement.style.setProperty('--mobile-panel-h', '0px');
-        setTimeout(() => {
-            if (views.rank) views.rank.classList.add('hidden');
-            if (views.chat) views.chat.classList.add('hidden');
-        }, 150);
-    } else {
-        document.documentElement.style.setProperty('--mobile-panel-h', DEFAULT_MOBILE_PANEL_H);
-
-        Object.keys(views).forEach(k => {
-            const v = views[k];
-            if (!v) return;
-            if (k === tab) {
-                v.classList.remove('hidden');
-                v.classList.add('flex', 'animate-slide-up');
-            } else {
-                v.classList.add('hidden');
-                v.classList.remove('flex', 'animate-slide-up');
-            }
-        });
-
-        if (tab === 'chat') {
-            setTimeout(() => {
-                const box = document.getElementById('chat-box-mobile');
-                if (box) box.scrollTop = box.scrollHeight;
-            }, 100);
-        }
-    }
-
-    try { sfx.play('pop'); } catch (e) { }
-    // Resize canvas after layout shift finishes
-    setTimeout(resizeCanvas, 350);
-}
-
 // Initial Mobile View
 if (window.innerWidth < MOBILE_BREAKPOINT) {
-    setTimeout(() => switchTab('chat'), 100);
+    setTimeout(() => { if (typeof switchTab === 'function') window.switchTab('chat'); }, 100);
 }
-
-
-
-window.switchTab = switchTab;
 
 function updateLocalTimer() {
     // If not in a state with a timer, clear timer visual
     const statesWithTimer = ['drawing', 'choosing', 'countdown', 'ended', 'game_over'];
     if (!statesWithTimer.includes(gameState.status)) {
-        if (timerEl) timerEl.innerText = "--";
-        if (timerProgress) timerProgress.style.strokeDashoffset = 0;
+        if (ui.timer) ui.timer.innerText = "--";
+        if (ui.timerProgress) ui.timerProgress.style.strokeDashoffset = 0;
         return;
     }
 
     const now = Date.now() / 1000;
-    // Use Math.ceil so 59.9s shows as 60, and 0.1s shows as 1. 0 is 0.
     let left = gameState.endTime > 0 ? Math.max(0, Math.ceil(gameState.endTime - now)) : 0;
 
-    if (timerEl) {
-        timerEl.innerText = left;
-        // Pulse red and play tick when low time
+    if (ui.timer) {
+        ui.timer.innerText = left;
         if (left <= 10 && left > 0) {
-            timerEl.classList.add('text-red-600', 'animate-pulse');
-            // Ambient Tension: Play tick sound during drawing phase
+            ui.timer.classList.add('text-red-600', 'animate-pulse');
             if (gameState.status === 'drawing') {
                 try { sfx.play('tick'); } catch (e) { }
             }
         } else {
-            timerEl.classList.remove('text-red-600', 'animate-pulse');
+            ui.timer.classList.remove('text-red-600', 'animate-pulse');
         }
     }
 
-    if (timerProgress) {
+    if (ui.timerProgress) {
         let total = gameState.totalTime || 60;
         if (gameState.status === 'choosing') total = 7;
         if (gameState.status === 'countdown') total = 3;
         if (gameState.status === 'ended') total = 10;
         if (gameState.status === 'game_over') total = 15;
 
-        // If time is up, offset is 100 (empty). If full, 0.
-        // pct = percentage remaining. 1.0 = full. 0.0 = empty.
         const pct = Math.min(1, Math.max(0, left / total));
-        // StrokeDashArray is 100. Offset 0 = Full. Offset 100 = Empty.
         const offset = 100 - (pct * 100);
-        timerProgress.style.strokeDashoffset = offset;
+        ui.timerProgress.style.strokeDashoffset = offset;
     }
 }
 
@@ -290,8 +234,8 @@ function startDraw(e) {
 }
 
 function drawDot(nx, ny, color, size) {
-    const x = nx * canvas.width;
-    const y = ny * canvas.height;
+    const x = nx * (canvas.width / (window.devicePixelRatio || 1));
+    const y = ny * (canvas.height / (window.devicePixelRatio || 1));
     ctx.beginPath();
     ctx.arc(x, y, size / 2, 0, Math.PI * 2);
     ctx.fillStyle = color;
@@ -322,13 +266,26 @@ function draw(e) {
     if (!painting || !gameState.myTurn) return;
     const pos = getNormalizedPos(e);
 
-    // Local Draw
-    drawLine(lastPos.x, lastPos.y, pos.x, pos.y, gameState.color, gameState.size);
+    // Advanced Local Smoothing (Live Interpolation)
+    ctx.lineWidth = gameState.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = gameState.color;
+
+    // Use current resolution factor
+    const factorW = canvas.width / (window.devicePixelRatio || 1);
+    const factorH = canvas.height / (window.devicePixelRatio || 1);
+
+    ctx.beginPath();
+    ctx.moveTo(lastPos.x * factorW, lastPos.y * factorH);
+    ctx.lineTo(pos.x * factorW, pos.y * factorH);
+    ctx.stroke();
 
     lastPos = pos;
     pointsBuffer.push(pos);
+    strokeHistory.push({ type: 'line', x1: lastPos.x, y1: lastPos.y, x2: pos.x, y2: pos.y, color: gameState.color, size: gameState.size });
 
-    // Throttle: Send partial stroke if buffer is large enough OR 250ms passed
+    // Throttle for server sync
     const now = Date.now();
     if (pointsBuffer.length > 20 || (now - lastSendTime > 250)) {
         sendStrokes();
@@ -380,28 +337,30 @@ async function syncState() {
         });
         const res = await response.json();
 
-        // Handle Session Error
-        if (res.error === 'Invalid Session') {
-            alert('Session expired. Redirecting to home.');
-            window.location.href = APP_ROOT + 'index.php';
+        // Handle Session Error with Grace
+        if (res.error === 'Invalid Session' || res.error === 'Room not found') {
+            console.error("Session Integrity Check Failed:", res.error);
+            window.sessionFailCount = (window.sessionFailCount || 0) + 1;
+            if (window.sessionFailCount > 3) {
+                localStorage.removeItem('dg_player'); 
+                window.location.href = APP_ROOT;
+            }
             return;
         }
+        window.sessionFailCount = 0; 
 
         if (res.data && res.data.room) {
-            if (roomCodeDisplay) roomCodeDisplay.textContent = res.data.room.room_code || '????';
+            if (ui.roomCode) ui.roomCode.textContent = res.data.room.room_code || '????';
         }
 
-        if (!res.data) {
-            console.warn("Sync: No data received", res);
-            return;
-        }
+        if (!res.data) return;
         const data = res.data;
 
         // Round Change / Data Sync
         if (data.round.id != gameState.roundId) {
             if (data.round.id > 0 && data.round.id > gameState.roundId) {
                 gameState.lastStrokeId = 0;
-                gameState.lastMsgId = 0; // Reset message tracking for new round if needed
+                gameState.lastMsgId = 0;
                 processedMsgIds.clear();
                 strokeHistory = [];
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -417,33 +376,25 @@ async function syncState() {
         gameState.status = data.round.status || 'lobby';
 
         if (oldStatus === 'choosing' && gameState.status !== 'choosing') {
-            if (wordSelect) wordSelect.innerHTML = '';
+            if (ui.wordSelect) ui.wordSelect.innerHTML = '';
         }
 
-        // Round End Sound
         if (oldStatus === 'drawing' && gameState.status === 'ended') {
             try { sfx.play('ding'); } catch (e) { }
         }
 
-        if (document.getElementById('game-status-text'))
-            document.getElementById('game-status-text').textContent = gameState.status === 'lobby' ? 'LOBBY' : gameState.status.toUpperCase();
+        if (data.room.current_round && ui.roundText) ui.roundText.textContent = data.room.current_round;
+        if (data.room.max_rounds && ui.maxRounds) ui.maxRounds.textContent = data.room.max_rounds;
 
-        if (document.getElementById('current-round')) document.getElementById('current-round').textContent = data.room.current_round;
-        if (document.getElementById('max-rounds')) document.getElementById('max-rounds').textContent = data.room.max_rounds;
-
-        // BGM Logic: Play only in lobby or between rounds
+        // BGM Logic
         if (gameState.status === 'lobby' || gameState.status === 'ended' || gameState.status === 'game_over' || gameState.status === 'finished') {
             sfx.playBGM();
         } else {
-            // Stop during choosing, countdown, and drawing
             sfx.stopBGM();
         }
 
-        // Sync Music Icon
-        const musicIcon = document.getElementById('music-icon');
-        if (musicIcon) {
-            musicIcon.innerText = sfx.getBGMStatus() ? '🔊' : '🔇';
-        }
+        const musicIcon = getEl('music-icon');
+        if (musicIcon) musicIcon.innerText = sfx.getBGMStatus() ? '🔊' : '🔇';
 
         if (data.round.time_left !== undefined) {
             const now = Math.floor(Date.now() / 1000);
@@ -453,7 +404,6 @@ async function syncState() {
 
         updatePlayers(data.players, data.round.drawer_id);
 
-        // Turn Logic
         const isMe = data.me == data.round.drawer_id;
         const wasMe = gameState.myTurn;
         gameState.myTurn = (gameState.status === 'drawing' && isMe);
@@ -463,111 +413,74 @@ async function syncState() {
             try { sfx.play('start'); } catch (e) { }
         }
 
-        const tools = document.getElementById('drawing-tools');
-        if (gameState.myTurn) {
-            if (tools) tools.classList.remove('hidden');
-        } else {
-            if (tools) tools.classList.add('hidden');
+        const tools = getEl('drawing-tools');
+        if (tools) {
+            if (gameState.myTurn) tools.classList.remove('hidden');
+            else tools.classList.add('hidden');
         }
-
-        // Reaction Bar visibility
-        const reactionBar = document.getElementById('reaction-bar');
-        if (reactionBar) {
-            if (gameState.status === 'lobby' || gameState.status === 'finished' || gameState.status === 'game_over') {
-                reactionBar.classList.add('hidden');
-            } else {
-                reactionBar.classList.remove('hidden');
-            }
+        
+        if (gameState.status === 'drawing' && ui.overlay && !ui.overlay.classList.contains('hidden')) {
+            if (ui.floatingHud) ui.floatingHud.style.display = 'flex';
+        } else if (gameState.status === 'drawing') {
+            if (ui.floatingHud) ui.floatingHud.style.display = 'flex';
+        } else {
+            if (ui.floatingHud) ui.floatingHud.style.display = 'none';
         }
 
         // Overlays
-        // Redundant declarations removed to avoid TDZ errors
-        // const overlayTitle = document.getElementById('overlay-title');
-        // const overlaySubtitle = document.getElementById('overlay-subtitle');
-        // const wordSelect = document.getElementById('word-selection');
-        // const startBtn = document.getElementById('start-btn');
-
         if (gameState.status === 'lobby') {
-            if (overlay) overlay.classList.remove('hidden');
-            if (overlayTitle) overlayTitle.textContent = "WAITING FOR PLAYERS";
-            if (overlaySubtitle) {
-                overlaySubtitle.textContent = "Share the room code: " + (data.room.room_code || '????');
-                overlaySubtitle.classList.remove('hidden');
+            if (ui.overlay) ui.overlay.classList.remove('hidden');
+            if (ui.overlayTitle) ui.overlayTitle.textContent = "WAITING FOR PLAYERS";
+            if (ui.overlaySubtitle) {
+                ui.overlaySubtitle.textContent = "Share the room code: " + (data.room.room_code || '????');
+                ui.overlaySubtitle.classList.remove('hidden');
             }
-            if (wordSelect) wordSelect.classList.add('hidden');
+            if (ui.wordSelect) ui.wordSelect.classList.add('hidden');
 
-            // Use improved flags
             const mePlayer = data.players.find(p => p.is_me);
             const isHost = mePlayer ? mePlayer.is_host : false;
-
-            if (startBtn) {
-                if (isHost) {
-                    startBtn.classList.remove('hidden');
-                    startBtn.classList.add('flex'); // Ensure flex display
-                } else {
-                    startBtn.classList.add('hidden');
-                    startBtn.classList.remove('flex');
-                }
+            if (ui.startBtn) {
+                if (isHost) ui.startBtn.classList.remove('hidden');
+                else ui.startBtn.classList.add('hidden');
             }
         } else if (gameState.status === 'choosing') {
-            if (overlay) overlay.classList.remove('hidden');
-            if (startBtn) startBtn.classList.add('hidden');
+            if (ui.overlay) ui.overlay.classList.remove('hidden');
+            if (ui.startBtn) ui.startBtn.classList.add('hidden');
             if (isMe) {
-                if (overlayTitle) overlayTitle.textContent = "IT'S YOUR TURN!";
-                if (overlaySubtitle) {
+                if (ui.overlayTitle) ui.overlayTitle.textContent = "IT'S YOUR TURN!";
+                if (ui.overlaySubtitle) {
                     const left = Math.max(0, Math.ceil(gameState.endTime - Date.now() / 1000));
-                    overlaySubtitle.innerHTML = `Choose a Word to Draw <br> <span class="text-3xl font-black text-pop-pink animate-pulse">${left}s</span>`;
-                    overlaySubtitle.classList.remove('hidden');
+                    ui.overlaySubtitle.innerHTML = `Choose a Word <br> <span class="text-3xl font-black text-pop-pink">${left}s</span>`;
+                    ui.overlaySubtitle.classList.remove('hidden');
                 }
-                if (wordSelect) {
-                    wordSelect.classList.remove('hidden');
+                if (ui.wordSelect) {
+                    ui.wordSelect.classList.remove('hidden');
                     const options = data.round.options || data.words || [];
-                    if (options.length > 0 && wordSelect.children.length === 0) {
+                    if (options.length > 0 && ui.wordSelect.children.length === 0) {
                         options.forEach(w => {
                             const btn = document.createElement('button');
-                            btn.className = "bg-white hover:bg-pop-blue border-[3px] border-ink p-3 md:p-5 rounded-2xl md:rounded-3xl text-ink font-black text-base md:text-2xl hover:scale-[1.02] active:scale-95 transition-all shadow-[6px_6px_0px_#000] flex items-center justify-between";
-
-                            const badge = w.difficulty == 'easy' ? '🟢' : (w.difficulty == 'medium' ? '🟡' : '🔴');
-                            btn.innerHTML = `
-                                <span class="uppercase tracking-tight">${escapeHTML(w.word)}</span>
-                                <div class="flex items-center gap-1.5 bg-gray-100 px-2 py-1 rounded-lg border-2 border-ink shadow-[2px_2px_0px_#000]">
-                                    <span class="text-[10px] md:text-xs">${badge}</span>
-                                    <span class="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-gray-500">${escapeHTML(w.difficulty)}</span>
-                                </div>
-                            `;
+                            btn.className = "w-full neo-btn py-2 px-4 bg-white hover:bg-pop-yellow flex justify-between items-center mb-1";
+                            btn.innerHTML = `<span>${escapeHTML(w.word)}</span><span class="text-[8px] border-ink px-1 rounded-full bg-gray-100">${escapeHTML(w.difficulty)}</span>`;
                             btn.onclick = () => selectWord(w.id);
-                            wordSelect.appendChild(btn);
+                            ui.wordSelect.appendChild(btn);
                         });
                     }
                 }
             } else {
-                if (overlayTitle) overlayTitle.textContent = "DRAWER IS CHOOSING";
-                if (overlaySubtitle) {
-                    overlaySubtitle.textContent = "Get ready to guess!";
-                    overlaySubtitle.classList.remove('hidden');
-                }
-                if (wordSelect) wordSelect.classList.add('hidden');
+                if (ui.overlayTitle) ui.overlayTitle.textContent = "DRAWER IS CHOOSING";
+                if (ui.wordSelect) ui.wordSelect.classList.add('hidden');
             }
         } else if (gameState.status === 'countdown') {
-            if (overlay) overlay.classList.remove('hidden');
-            if (overlayTitle) overlayTitle.textContent = "GET READY!";
-            if (overlaySubtitle) {
-                const left = data.round.time_left || 0;
-                overlaySubtitle.innerHTML = `<div class="text-6xl font-black text-ink my-4 animate-bounce">${left}</div><div class="text-sm font-bold text-gray-500 uppercase">Guess the drawing to win points!</div>`;
-                overlaySubtitle.classList.remove('hidden');
-            }
-            if (wordSelect) wordSelect.classList.add('hidden');
-            if (startBtn) startBtn.classList.add('hidden');
-            if (wordDisplay) wordDisplay.textContent = ''; // Clear word display during countdown
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear
+            if (ui.overlay) ui.overlay.classList.remove('hidden');
+            if (ui.overlayTitle) ui.overlayTitle.textContent = "GET READY!";
+            if (ui.wordSelect) ui.wordSelect.classList.add('hidden');
+            if (ui.startBtn) ui.startBtn.classList.add('hidden');
+            if (ui.wordDisplay) ui.wordDisplay.textContent = ''; 
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
 
         } else if (gameState.status === 'drawing') {
-            if (overlay) overlay.classList.add('hidden');
-            if (data.round.word) {
-                if (wordDisplay) wordDisplay.textContent = data.round.word;
-            } else {
-                if (wordDisplay) wordDisplay.textContent = "";
-            }
+            if (ui.overlay) ui.overlay.classList.add('hidden');
+            if (ui.wordDisplay) ui.wordDisplay.textContent = data.round.word || "";
 
             if (data.round.id != gameState.roundId) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -576,51 +489,19 @@ async function syncState() {
                 gameState.lastStrokeId = 0;
             }
         } else if (gameState.status === 'ended') {
-            if (overlay) overlay.classList.remove('hidden');
-            if (overlayTitle) overlayTitle.textContent = `ROUND OVER!`;
-
-            const nextIn = data.round.time_left || 0;
-            if (overlaySubtitle) {
-                overlaySubtitle.innerHTML = `The word was: <span class="font-black text-2xl mx-2 text-ink uppercase">${data.round.word}</span><br><div class="text-xs font-bold text-gray-400 mt-4 uppercase tracking-widest">Next turn in ${nextIn}s</div>`;
-                overlaySubtitle.classList.remove('hidden');
-            }
-            if (wordSelect) wordSelect.classList.add('hidden');
-            if (startBtn) startBtn.classList.add('hidden');
+            if (ui.overlay) ui.overlay.classList.remove('hidden');
+            if (ui.overlayTitle) ui.overlayTitle.textContent = `ROUND OVER!`;
+            if (ui.wordSelect) ui.wordSelect.classList.add('hidden');
+            if (ui.startBtn) ui.startBtn.classList.add('hidden');
 
         } else if (gameState.status === 'finished' || gameState.status === 'game_over') {
-            if (overlay) overlay.classList.remove('hidden');
-
-            // Find Winner
-            const winner = data.players.length > 0 ? data.players[0] : { username: 'Nobody', avatar: '👻' };
-
-            if (overlayTitle) overlayTitle.textContent = `GAME OVER!`;
-
-            const timeLeft = data.round.time_left || 0;
-            if (overlaySubtitle) {
-                overlaySubtitle.innerHTML = `
-                    <div class="mb-4">
-                        <div class="text-6xl mb-2 bounce-slow">${escapeHTML(winner.avatar)}</div>
-                        <div class="text-2xl font-black text-ink uppercase">${escapeHTML(winner.username)}</div>
-                        <div class="text-lg font-mono font-bold text-pop-purple border-2 border-dashed border-pop-purple rounded-lg px-3 py-1 mt-2 inline-block bg-purple-50">${winner.score} PTS</div>
-                    </div>
-                    ${gameState.status === 'game_over' ? `<div class="text-xs font-extrabold text-gray-500 mt-8 uppercase tracking-widest animate-pulse">Restarting in ${timeLeft}s...</div>` : '<div class="text-xs font-bold text-gray-400 mt-8">Calculating results...</div>'}
-                `;
-                overlaySubtitle.classList.remove('hidden');
-            }
-
-            if (wordSelect) wordSelect.classList.add('hidden');
-            if (startBtn) startBtn.classList.add('hidden');
-
-            // Switch to rank tab on mobile automatically
+            if (ui.overlay) ui.overlay.classList.remove('hidden');
+            if (ui.overlayTitle) ui.overlayTitle.textContent = `GAME OVER!`;
             if (window.innerWidth < 1024) switchTab('rank');
-
-            // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
     } catch (e) {
         console.error("SyncState Error:", e);
-        console.log("Attempted URL:", APP_ROOT + 'api/game_state.php');
-        if (typeof response !== 'undefined') console.log("Response Status:", response.status);
     }
 }
 
@@ -632,15 +513,13 @@ function toggleMusicUI() {
     }
 }
 
-// Global scope initialization
-window.syncState = syncState;
-window.toggleMusicUI = toggleMusicUI;
+// Global scope (Moved to top for safety)
 
 function showTurnNotification() {
-    if (turnNotif) {
-        turnNotif.classList.remove('opacity-0');
+    if (ui.turnNotif) {
+        ui.turnNotif.classList.remove('opacity-0');
         setTimeout(() => {
-            turnNotif.classList.add('opacity-0');
+            if (ui.turnNotif) ui.turnNotif.classList.add('opacity-0');
         }, 3000);
     }
 }
@@ -648,7 +527,7 @@ function showTurnNotification() {
 function updatePlayers(players, drawerId) {
     const lists = [document.getElementById('player-list'), document.getElementById('player-list-mobile')];
 
-    // Sort players
+    // Sort players by score descending
     players.sort((a, b) => b.score - a.score);
 
     lists.forEach(list => {
@@ -657,29 +536,30 @@ function updatePlayers(players, drawerId) {
         players.forEach((p, index) => {
             const isDrawer = p.id == drawerId;
             const div = document.createElement('div');
-            // Ranking
-            const rank = index === 0 ? '👑' : (index + 1);
+            const rankEmoji = index === 0 ? '👑' : (index === 1 ? '🥈' : (index === 2 ? '🥉' : ''));
             const isMe = p.is_me;
+            const isHost = p.is_host;
 
-            div.className = `group p-3.5 rounded-2xl flex items-center gap-4 transition-all border-[3px] shadow-[4px_4px_0px_#1e1e1e33] ${isDrawer ? 'border-pop-yellow bg-yellow-50/50 shadow-pop-yellow/20' : 'border-gray-100 bg-white hover:border-gray-200'} ${isMe ? 'ring-2 ring-pop-blue ring-offset-2' : ''}`;
+            div.className = `group relative p-4 rounded-[1.25rem] md:rounded-2xl flex items-center gap-4 transition-all border-[3px] shadow-[4px_4px_0px_#1e1e1e22] hover:shadow-[6px_6px_0px_#000] 
+                ${isDrawer ? 'bg-pop-yellow/10 border-pop-yellow' : 'bg-white border-ink/10 hover:border-ink'} 
+                ${isMe ? 'ring-2 ring-pop-blue ring-offset-2' : ''}`;
 
             div.innerHTML = `
-                <div class="font-black text-gray-400 w-6 h-6 rounded-full flex items-center justify-center text-xs bg-gray-50 border border-gray-100 shrink-0">
-                    ${rank}
-                </div>
-                <div class="text-3xl shrink-0 filter drop-shadow-sm group-hover:scale-110 transition-transform">${escapeHTML(p.avatar)}</div>
+                ${rankEmoji ? `<div class="absolute -top-2 -left-2 text-xl drop-shadow-md z-10">${rankEmoji}</div>` : ''}
+                <div class="text-4xl shrink-0 group-hover:scale-110 transition-transform duration-300 transform-gpu">${escapeHTML(p.avatar)}</div>
                 <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5 mb-0.5">
-                        <span class="font-black text-ink truncate">${escapeHTML(p.username)}${isMe ? ' (You)' : ''}</span>
-                        ${isDrawer ? '<span class="animate-bounce-slow text-xs bg-pop-yellow border-2 border-ink px-1.5 py-0.5 rounded-full font-black text-[8px] uppercase tracking-tighter">Drawing</span>' : ''}
+                    <div class="flex items-center gap-1.5 mb-1">
+                        <span class="font-black text-ink truncate text-sm md:text-base">${escapeHTML(p.username)}${isMe ? ' <span class="text-[10px] text-pop-blue">(YOU)</span>' : ''}</span>
+                        ${isHost ? '<span class="text-[8px] font-black bg-ink text-white px-1.5 rounded-sm uppercase transform rotate-2">HOST</span>' : ''}
                     </div>
                     <div class="flex items-center gap-2">
-                         <div class="h-1.5 flex-1 bg-gray-100 rounded-full overflow-hidden">
-                             <div class="h-full bg-pop-purple transition-all duration-1000" style="width: ${Math.min(100, (p.score / 500) * 100)}%"></div>
+                         <div class="h-2 flex-1 bg-gray-100 rounded-full overflow-hidden border border-ink/5">
+                             <div class="h-full bg-pop-purple transition-all duration-1000" style="width: ${Math.min(100, (p.score / 1000) * 100)}%"></div>
                          </div>
-                         <span class="text-[10px] font-black font-mono text-pop-purple shrink-0">${p.score} <span class="text-[8px] opacity-70">PTS</span></span>
+                         <span class="text-[11px] font-black font-mono text-pop-purple shrink-0 bg-pop-purple/5 px-1.5 rounded-md">${p.score} <span class="text-[8px] opacity-60">PTS</span></span>
                     </div>
                 </div>
+                ${isDrawer ? '<div class="absolute -right-2 -top-2 rotate-6 bg-ink text-white text-[9px] font-black py-1 px-3 rounded-xl border-2 border-pop-yellow float-anim shadow-sm">DRAWING</div>' : ''}
             `;
             list.appendChild(div);
         });
@@ -847,11 +727,14 @@ function handleIncomingMessage(m) {
             }
         } else {
             const isMe = m.player_id == player.id;
-            div.className = `flex flex-col mb-3 max-w-[90%] px-2 ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`;
+            div.className = `flex flex-col mb-4 max-w-[85%] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`;
             div.innerHTML = `
-                <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5 px-1">${escapeHTML(username)}</span>
-                <div class="px-4 py-2.5 rounded-2xl border-2 shadow-sm font-bold text-sm leading-snug 
-                    ${isMe ? 'bg-pop-blue border-ink text-black rounded-tr-none' : 'bg-white border-ink text-ink rounded-tl-none'}">
+                <div class="flex items-center gap-1.5 mb-1 px-1">
+                    <span class="text-[10px] font-black text-ink/40 uppercase tracking-widest">${escapeHTML(username)}</span>
+                </div>
+                <div class="group relative px-4 py-2.5 rounded-2xl border-[2.5px] shadow-[3px_3px_0px_#1e1e1e11] font-bold text-sm leading-snug transition-all
+                    ${isMe ? 'bg-pop-blue border-ink text-black rounded-tr-none hover:shadow-[4px_4px_0px_#000]' : 'bg-white border-ink text-ink rounded-tl-none hover:shadow-[4px_4px_0px_#000]'}"
+                    style="transform: rotate(${isMe ? '1deg' : '-1deg'})">
                     ${escapeHTML(m.message)}
                 </div>
             `;
@@ -946,27 +829,24 @@ function switchTab(tab) {
         t.classList.toggle('active', k === tab);
     });
 
-    // 2. Handle Views with smooth height change
+    // 2. Switching Logic for Split-Screen Panel
+    // Note: Canvas is now perpetually visible in the upper half.
+    // The lower panel toggles between Leaderboard and Chat.
+    
     if (tab === 'draw') {
-        document.documentElement.style.setProperty('--mobile-panel-h', '0px');
-        // Delay hiding views slightly for transition
-        setTimeout(() => {
-            if (views.rank) views.rank.classList.add('hidden');
-            if (views.chat) views.chat.classList.add('hidden');
-        }, 150);
+        // 'Focus' mode: We could minimize the panel, but for now we'll just keep it on 'Chat' or 'Rank'
+        // or toggle a focused state. Let's keep it simple: focus just means the tabs reflect the state.
     } else {
-        document.documentElement.style.setProperty('--mobile-panel-h', DEFAULT_MOBILE_PANEL_H);
-
-        // Show active view
+        // Show active view in the lower panel
         Object.keys(views).forEach(k => {
             const v = views[k];
             if (!v) return;
             if (k === tab) {
                 v.classList.remove('hidden');
-                v.classList.add('flex', 'animate-slide-up');
+                v.classList.add('flex');
             } else {
                 v.classList.add('hidden');
-                v.classList.remove('flex', 'animate-slide-up');
+                v.classList.remove('flex');
             }
         });
 
@@ -978,11 +858,9 @@ function switchTab(tab) {
         }
     }
 
-    // 3. Performance & Clean Haptics
     try { sfx.play('pop'); } catch (e) { }
-
-    // Resize canvas after layout shift finishes
-    setTimeout(resizeCanvas, 350);
+    // Always trigger resize to be safe with layout shifts
+    setTimeout(resizeCanvas, 150);
 }
 
 window.switchTab = switchTab;
@@ -1069,19 +947,14 @@ function setColor(c) {
 
     // Update active state in UI
     document.querySelectorAll('.color-dot').forEach(btn => {
-        btn.classList.toggle('ring-4', false);
-        btn.classList.toggle('ring-ink', false);
-        btn.classList.toggle('scale-110', false);
-
-        // Match by hex (assuming we use hex consistently in HTML too)
-        // or we can just rely on the onclick passing the color
+        btn.classList.remove('active', 'ring-4', 'ring-ink', 'scale-110', 'ring-2');
     });
 
     // The event target is the most reliable
     if (window.event && window.event.currentTarget) {
         const target = window.event.currentTarget;
         if (target.classList.contains('color-dot')) {
-            target.classList.add('ring-4', 'ring-ink', 'scale-110');
+            target.classList.add('active');
         }
     }
 
@@ -1090,6 +963,8 @@ function setColor(c) {
 
 function setSize(s) {
     gameState.size = s;
+    const slider = document.getElementById('brush-size');
+    if (slider) slider.value = s;
     updateBrushPreview();
 }
 
@@ -1106,9 +981,6 @@ function clearCanvasAction() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     strokeHistory = [];
 
-    if (socket && socket.connected) {
-        socket.emit('clear_canvas');
-    }
 
     // Still notify PHP for DB persistence
     fetch(`${APP_ROOT}api/draw_sync.php`, {
@@ -1129,9 +1001,6 @@ function undoAction() {
         else drawLine(oldS.x1, oldS.y1, oldS.x2, oldS.y2, oldS.color, oldS.size);
     });
 
-    if (socket && socket.connected) {
-        socket.emit('undo');
-    }
 
     fetch(`${APP_ROOT}api/draw_sync.php`, {
         method: 'POST',
@@ -1147,10 +1016,30 @@ async function leaveRoom() {
         await fetch(`${APP_ROOT}api/rooms.php`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ token: player.token, action: 'leave' })
+            body: new URLSearchParams({ token: player.token, action: 'leave_room' })
         });
-    } catch (e) { }
+    } catch (e) { console.error("Leave error:", e); }
 
     localStorage.removeItem('dg_player');
     window.location.href = APP_ROOT;
 }
+window.selectWord = selectWord;
+window.startGame = startGame;
+window.syncState = syncState;
+window.sendReaction = sendReaction;
+window.setColor = setColor;
+window.setSize = setSize;
+window.undoAction = undoAction;
+window.clearCanvasAction = clearCanvasAction;
+window.toggleMusicUI = toggleMusicUI;
+window.leaveRoom = leaveRoom;
+
+// --- Engine Start ---
+updateBrushPreview();
+setTimeout(() => syncState(), 100);
+setInterval(() => canPoll('state') && syncState(), 1000);
+setInterval(() => canPoll('draw') && syncDraw(), 400); 
+setInterval(() => canPoll('chat') && syncChat(), 1000);
+setInterval(() => canPoll('strokes') && sendStrokes(), 500);
+if (timerInterval) clearInterval(timerInterval);
+timerInterval = setInterval(() => updateLocalTimer(), 1000);

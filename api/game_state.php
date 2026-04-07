@@ -1,309 +1,240 @@
 <?php
+/**
+ * Game State Management & Synchronizer
+ * Refactored to PDO with transactions to prevent race conditions.
+ * Fixed timestamp logic for PDO compatibility.
+ */
 require_once 'db.php';
 
-// Auth check
-$token = sanitize($conn, $_POST['token'] ?? '');
-$player_q = mysqli_query($conn, "SELECT * FROM players WHERE session_token = '$token'");
-if (mysqli_num_rows($player_q) === 0) {
-    jsonResponse(['error' => 'Invalid Session'], false);
-}
-$player = mysqli_fetch_assoc($player_q);
-$room_id = $player['room_id'];
-$player_id = $player['id'];
-$is_host = $player['is_host'];
+// 0. Player Pruning (Heartbeat) - Remove players inactive for > 180 seconds (3 mins)
+// This keeps the sessions clean while allowing for longer page refreshes.
+DB::query("DELETE FROM players WHERE last_active < DATE_SUB(NOW(), INTERVAL 180 SECOND)");
 
-// Update Last Active
-mysqli_query($conn, "UPDATE players SET last_active = NOW() WHERE id = $player_id");
+// 1. Authentication
+$token = $_POST['token'] ?? '';
+$player = DB::fetch("SELECT * FROM players WHERE session_token = ?", [$token]);
 
-// --- FETCH CONTEXT ---
-$room_res = mysqli_query($conn, "SELECT * FROM rooms WHERE id = $room_id");
-$room = mysqli_fetch_assoc($room_res);
-
-// Threshold: 30 seconds of silence
-$inactivity_limit = 30;
-$now_sql = "NOW()";
-
-// 1. CLEANUP INACTIVE PLAYERS
-$inactive_p_res = mysqli_query($conn, "SELECT id, username, is_host FROM players WHERE room_id = $room_id AND id != $player_id AND last_active < DATE_SUB($now_sql, INTERVAL $inactivity_limit SECOND)");
-
-while ($dead_p = mysqli_fetch_assoc($inactive_p_res)) {
-    $dead_id = $dead_p['id'];
-    $dead_name = mysqli_real_escape_string($conn, $dead_p['username']);
-    mysqli_query($conn, "DELETE FROM players WHERE id = $dead_id");
-    mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($room_id, 0, '$dead_name left the room', 'system')");
+if (!$player) {
+    jsonResponse(['error' => 'Invalid Session'], false, 401);
 }
 
-// Ensure Host Exists
-if (!$room['host_id'] || mysqli_num_rows(mysqli_query($conn, "SELECT id FROM players WHERE id = {$room['host_id']}")) === 0) {
-    $new_host_res = mysqli_query($conn, "SELECT id, username FROM players WHERE room_id = $room_id ORDER BY id ASC LIMIT 1");
-    if ($new_host = mysqli_fetch_assoc($new_host_res)) {
-        $new_host_id = $new_host['id'];
-        mysqli_query($conn, "UPDATE players SET is_host = 1 WHERE id = $new_host_id");
-        mysqli_query($conn, "UPDATE rooms SET host_id = $new_host_id WHERE id = $room_id");
-        $h_name = mysqli_real_escape_string($conn, $new_host['username']);
-        mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($room_id, 0, '$h_name is now the host', 'system')");
-        if ($new_host_id == $player_id) $is_host = 1;
-        // Refresh room data
-        $room['host_id'] = $new_host_id;
+$room_id = (int)$player['room_id'];
+$player_id = (int)$player['id'];
+$is_host = (bool)$player['is_host'];
+
+// 2. Transacted State Update
+try {
+    $pdo->beginTransaction();
+
+    // Update Player Activity
+    DB::query("UPDATE players SET last_active = NOW() WHERE id = ?", [$player_id]);
+
+    // Room Locking for consistency
+    $room = DB::fetch("SELECT * FROM rooms WHERE id = ? FOR UPDATE", [$room_id]);
+
+    // 3. Cleanup Inactive Players (60s threshold for host stability)
+    $inactive = DB::fetchAll("SELECT id, username FROM players WHERE room_id = ? AND id != ? AND last_active < DATE_SUB(NOW(), INTERVAL 60 SECOND)", [$room_id, $player_id]);
+    foreach ($inactive as $p) {
+        DB::query("DELETE FROM players WHERE id = ?", [$p['id']]);
+        DB::insert('messages', [
+            'room_id' => $room_id, 
+            'message' => "{$p['username']} timed out", 
+            'type' => 'system'
+        ]);
     }
-}
 
-$action = $_POST['action'] ?? 'sync';
-// ... (Game Actions logic kept same) ...
-if ($action === 'start_game' && $is_host) {
-    if ($room['status'] === 'lobby' || $room['status'] === 'finished') {
-        $pq = mysqli_query($conn, "SELECT id FROM players WHERE room_id = $room_id");
-        $p_ids = [];
-        while($p = mysqli_fetch_assoc($pq)) $p_ids[] = $p['id'];
-        shuffle($p_ids);
-        foreach($p_ids as $idx => $pid) {
-            mysqli_query($conn, "UPDATE players SET turn_order = $idx, score = 0 WHERE id = $pid");
-        }
-        mysqli_query($conn, "UPDATE rooms SET status = 'playing', current_round = 1 WHERE id = $room_id");
-        mysqli_query($conn, "DELETE FROM rounds WHERE room_id = $room_id");
-        startNextTurn($conn, $room_id);
-        jsonResponse(['success' => true]);
-    }
-}
-
-if ($action === 'select_word') {
-    $word_id = intval($_POST['word_id']);
-    $round_q = mysqli_query($conn, "SELECT * FROM rounds WHERE room_id = $room_id ORDER BY id DESC LIMIT 1");
-    $round = mysqli_fetch_assoc($round_q);
-    if ($round && $round['drawer_id'] == $player_id && $round['status'] == 'choosing') { 
-        mysqli_query($conn, "UPDATE rounds SET word_id = $word_id, status = 'countdown', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 3 SECOND) WHERE id = {$round['id']}");
-        jsonResponse(['success' => true]);
-    }
-}
-
-// --- STATE MACHINE ---
-$round_q = mysqli_query($conn, "SELECT *, TIMESTAMPDIFF(SECOND, NOW(), end_time) as sql_time_left, TIMESTAMPDIFF(SECOND, start_time, NOW()) as elapsed FROM rounds WHERE room_id = $room_id ORDER BY id DESC LIMIT 1");
-$round = mysqli_fetch_assoc($round_q);
-
-if ($round) {
-    $timeLeft = intval($round['sql_time_left']);
-    $elapsed = intval($round['elapsed']);
-    $drawer_id = (int)$round['drawer_id'];
-
-    // Drawer Disconnect Check
-    if ($round['status'] !== 'ended' && $round['status'] !== 'game_over') {
-        $drawer_check = mysqli_query($conn, "SELECT id FROM players WHERE id = $drawer_id");
-        if (mysqli_num_rows($drawer_check) === 0) {
-            mysqli_query($conn, "UPDATE rounds SET status = 'ended', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 5 SECOND) WHERE id = {$round['id']}");
-            $round['status'] = 'ended';
-            $round['sql_time_left'] = 5;
-            mysqli_query($conn, "INSERT INTO messages (room_id, player_id, message, type) VALUES ($room_id, 0, 'Drawer disconnected! Skipping...', 'system')");
+    // 4. Host Migration
+    $hostExists = DB::fetch("SELECT id FROM players WHERE id = ? AND room_id = ?", [$room['host_id'], $room_id]);
+    if (!$hostExists) {
+        $newHost = DB::fetch("SELECT id, username FROM players WHERE room_id = ? ORDER BY id ASC LIMIT 1", [$room_id]);
+        if ($newHost) {
+            DB::query("UPDATE players SET is_host = 1 WHERE id = ?", [$newHost['id']]);
+            DB::query("UPDATE rooms SET host_id = ? WHERE id = ?", [$newHost['id'], $room_id]);
+            DB::insert('messages', ['room_id' => $room_id, 'message' => "{$newHost['username']} is now host", 'type' => 'system']);
+            if ($newHost['id'] == $player_id) $is_host = true;
+            $room['host_id'] = $newHost['id'];
         }
     }
 
-    // 0. CHOOSING -> Countdown
-    if ($round['status'] === 'choosing' && $timeLeft <= 0) {
-        $options = !empty($round['word_options']) ? explode(',', $round['word_options']) : [];
-        if (empty($options)) {
-             $wq = mysqli_query($conn, "SELECT id FROM words ORDER BY RAND() LIMIT 3");
-             while($w = mysqli_fetch_assoc($wq)) $options[] = $w['id'];
-             $ids_str = implode(',', $options);
-             mysqli_query($conn, "UPDATE rounds SET word_options = '$ids_str' WHERE id = {$round['id']}");
-        }
-        $word_id = $options[array_rand($options)];
-        mysqli_query($conn, "UPDATE rounds SET word_id = $word_id, status = 'countdown', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 3 SECOND) WHERE id = {$round['id']}");
-        $round['status'] = 'countdown';
-    }
+    $action = $_POST['action'] ?? 'sync';
 
-    // 1. COUNTDOWN -> DRAWING
-    if ($round['status'] === 'countdown' && $timeLeft <= 0) {
-        $duration = intval($room['round_duration'] ?: 60);
-        mysqli_query($conn, "UPDATE rounds SET status = 'drawing', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL $duration SECOND) WHERE id = {$round['id']}");
-        $round['status'] = 'drawing';
-    }
-
-    // 2. DRAWING -> ENDED
-    elseif ($round['status'] === 'drawing') {
-        if ($timeLeft <= 0) {
-            $g_res = mysqli_query($conn, "SELECT COUNT(DISTINCT player_id) as cnt FROM messages WHERE round_id = {$round['id']} AND type = 'guess'");
-            $correct_guesses = intval(mysqli_fetch_assoc($g_res)['cnt']);
-            if ($correct_guesses > 0) {
-                mysqli_query($conn, "UPDATE players SET score = score + ($correct_guesses * 3) WHERE id = $drawer_id");
+    // 5. Game Actions
+    if ($action === 'start_game' && $is_host) {
+        if (in_array($room['status'], ['lobby', 'finished', 'game_over'])) {
+            $p_ids = DB::fetchAll("SELECT id FROM players WHERE room_id = ?", [$room_id]);
+            $ids = array_column($p_ids, 'id');
+            shuffle($ids);
+            foreach ($ids as $idx => $pid) {
+                DB::query("UPDATE players SET turn_order = ?, score = 0 WHERE id = ?", [$idx, $pid]);
             }
-            mysqli_query($conn, "UPDATE rounds SET status = 'ended', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 10 SECOND) WHERE id = {$round['id']}");
-            $round['status'] = 'ended';
-        } else {
-            // Check if ALL players (excluding drawer) guessed
-            $active_p_cnt = intval(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM players WHERE room_id = $room_id AND id != $drawer_id"))['c']);
-            $guessed_cnt = intval(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(DISTINCT player_id) as c FROM messages WHERE round_id = {$round['id']} AND type = 'guess'"))['c']);
-            
-            if ($active_p_cnt > 0 && $guessed_cnt >= $active_p_cnt) {
-                // End early
-                mysqli_query($conn, "UPDATE rounds SET status = 'ended', start_time = NOW(), end_time = DATE_ADD(NOW(), INTERVAL 8 SECOND) WHERE id = {$round['id']}");
-                $round['status'] = 'ended';
-            } else {
-                // Dynamic Hints
-                $word_id = (int)$round['word_id'];
-                $word_q = mysqli_query($conn, "SELECT word FROM words WHERE id = $word_id");
-                $word_str = mysqli_fetch_assoc($word_q)['word'] ?? "";
-                $word_len = strlen($word_str);
-                if ($word_len > 2) {
-                    $hints_arr = !empty($round['hints_mask']) ? explode(',', $round['hints_mask']) : [];
-                    $max_hints = floor($word_len / 2.2);
-                    $should_h = false;
-                    $p1 = 0.35; $p2 = 0.65; $p3 = 0.85;
-                    $dur = intval($room['round_duration'] ?: 60);
-                    if ($elapsed > ($dur * $p1) && count($hints_arr) < 1) $should_h = true;
-                    if ($elapsed > ($dur * $p2) && count($hints_arr) < 2 && $max_hints >= 2) $should_h = true;
-                    if ($elapsed > ($dur * $p3) && count($hints_arr) < 3 && $max_hints >= 3) $should_h = true;
+            DB::query("UPDATE rooms SET status = 'playing', current_round = 1 WHERE id = ?", [$room_id]);
+            DB::query("DELETE FROM rounds WHERE room_id = ?", [$room_id]);
+            startNextTurn($room_id);
+        }
+    }
 
-                    if ($should_h && count($hints_arr) < $max_hints) {
-                        $p = [];
-                        for($i=0;$i<$word_len;$i++) if($word_str[$i] != ' ' && !in_array($i,$hints_arr)) $p[] = $i;
-                        if (!empty($p)) {
-                            $idx = $p[array_rand($p)];
-                            $hints_arr[] = $idx;
-                            $m = implode(',', $hints_arr);
-                            mysqli_query($conn, "UPDATE rounds SET hints_mask = '$m' WHERE id = {$round['id']}");
-                            $round['hints_mask'] = $m;
-                        }
-                    }
+    if ($action === 'select_word') {
+        $word_id = intval($_POST['word_id'] ?? 0);
+        $round = DB::fetch("SELECT * FROM rounds WHERE room_id = ? ORDER BY id DESC LIMIT 1", [$room_id]);
+        if ($round && $round['drawer_id'] == $player_id && $round['status'] == 'choosing') {
+            $end_time = date('Y-m-d H:i:s', time() + 3);
+            DB::query("UPDATE rounds SET word_id = ?, status = 'countdown', start_time = NOW(), end_time = ? WHERE id = ?", [$word_id, $end_time, $round['id']]);
+        }
+    }
+
+    // 6. State Machine Processing (Using Unix timestamps for reliable sync)
+    $now = time();
+    $round = DB::fetch("SELECT *, UNIX_TIMESTAMP(end_time) as end_unix, UNIX_TIMESTAMP(start_time) as start_unix FROM rounds WHERE room_id = ? ORDER BY id DESC LIMIT 1", [$room_id]);
+
+    if ($round) {
+        $timeLeft = (int)$round['end_unix'] - $now;
+        $elapsed = $now - (int)$round['start_unix'];
+        $drawer_id = (int)$round['drawer_id'];
+
+        // Drawer Disconnect Check (Refined: 60s tolerance)
+        $drawerActive = DB::fetch("SELECT id FROM players WHERE id = ? AND last_active > DATE_SUB(NOW(), INTERVAL 60 SECOND)", [$drawer_id]);
+        if (!$drawerActive && !in_array($round['status'], ['ended', 'game_over'])) {
+            $end_time_skipped = date('Y-m-d H:i:s', $now + 5);
+            DB::query("UPDATE rounds SET status = 'ended', start_time = ?, end_time = ? WHERE id = ?", 
+                       [date('Y-m-d H:i:s', $now), $end_time_skipped, $round['id']]);
+            $round['status'] = 'ended';
+            $timeLeft = 5; 
+        }
+
+        // State Transitions (Monotonic Logic)
+        if ($round['status'] === 'choosing' && $timeLeft <= 0) {
+            $options = !empty($round['word_options']) ? explode(',', $round['word_options']) : [];
+            $word_id = $options[array_rand($options)];
+            $end_time_cd = date('Y-m-d H:i:s', $now + 5); // 5s countdown
+            DB::query("UPDATE rounds SET word_id = ?, status = 'countdown', start_time = ?, end_time = ? WHERE id = ?", 
+                       [$word_id, date('Y-m-d H:i:s', $now), $end_time_cd, $round['id']]);
+        } 
+        elseif ($round['status'] === 'countdown' && $timeLeft <= 0) {
+            $dur = (int)$room['round_duration'] ?: 60;
+            $end_time_dr = date('Y-m-d H:i:s', $now + $dur);
+            DB::query("UPDATE rounds SET status = 'drawing', start_time = ?, end_time = ? WHERE id = ?", 
+                       [date('Y-m-d H:i:s', $now), $end_time_dr, $round['id']]);
+        }
+        elseif ($round['status'] === 'drawing') {
+            if ($timeLeft <= 0) {
+                // Award points to drawer for successful guesses
+                $guesses = DB::fetch("SELECT COUNT(DISTINCT player_id) as c FROM messages WHERE round_id = ? AND type = 'guess'", [$round['id']])['c'];
+                if ($guesses > 0) {
+                    DB::query("UPDATE players SET score = score + (? * 15) WHERE id = ?", [$guesses, $drawer_id]);
+                }
+                
+                $end_time_en = date('Y-m-d H:i:s', $now + 8);
+                DB::query("UPDATE rounds SET status = 'ended', start_time = ?, end_time = ? WHERE id = ?", 
+                           [date('Y-m-d H:i:s', $now), $end_time_en, $round['id']]);
+            } else {
+                // Early finish if all active guessers have found the word
+                $others = DB::fetch("SELECT COUNT(*) as c FROM players WHERE room_id = ? AND id != ? AND last_active > DATE_SUB(NOW(), INTERVAL 35 SECOND)", [$room_id, $drawer_id])['c'];
+                $guessed = DB::fetch("SELECT COUNT(DISTINCT player_id) as c FROM messages WHERE round_id = ? AND type = 'guess'", [$round['id']])['c'];
+                
+                if ($others > 0 && $guessed >= $others) {
+                    // Award points to drawer immediately
+                    DB::query("UPDATE players SET score = score + (? * 15) WHERE id = ?", [$guessed, $drawer_id]);
+                    
+                    $end_time_early = date('Y-m-d H:i:s', $now + 8);
+                    DB::query("UPDATE rounds SET status = 'ended', start_time = ?, end_time = ? WHERE id = ?", 
+                               [date('Y-m-d H:i:s', $now), $end_time_early, $round['id']]);
                 }
             }
         }
+        elseif ($round['status'] === 'ended' && $timeLeft <= 0) {
+            startNextTurn($room_id);
+        }
+        elseif ($round['status'] === 'game_over' && $timeLeft <= 0) {
+            DB::query("UPDATE players SET score = 0 WHERE room_id = ?", [$room_id]);
+            DB::query("UPDATE rooms SET status = 'playing', current_round = 1 WHERE id = ?", [$room_id]);
+            DB::query("DELETE FROM rounds WHERE room_id = ?", [$room_id]);
+            startNextTurn($room_id);
+        }
     }
 
-    // 3. ENDED -> Next
-    elseif ($round['status'] === 'ended' && $timeLeft <= 0) {
-        startNextTurn($conn, $room_id);
-    }
-
-    // 4. GAME OVER -> New
-    elseif ($round['status'] === 'game_over' && $timeLeft <= 0) {
-        mysqli_query($conn, "UPDATE players SET score = 0 WHERE room_id = $room_id");
-        mysqli_query($conn, "UPDATE rooms SET status = 'playing', current_round = 1 WHERE id = $room_id");
-        mysqli_query($conn, "DELETE FROM rounds WHERE room_id = $room_id");
-        startNextTurn($conn, $room_id);
-    }
+    $pdo->commit();
+} catch (Exception $e) {
+    $pdo->rollBack();
+    throw $e;
 }
 
-// --- BUILD RESPONSE ---
-
-// Room
-$room_res = mysqli_query($conn, "SELECT * FROM rooms WHERE id = $room_id");
-$room = mysqli_fetch_assoc($room_res);
-
-// Players
-$players_res = mysqli_query($conn, "SELECT id, username, avatar, score, is_host FROM players WHERE room_id = $room_id ORDER BY score DESC"); 
-// Note: Ordering by score for leaderboard
-$players = [];
-while ($row = mysqli_fetch_assoc($players_res)) {
-    $row['is_me'] = ($row['id'] == $player_id);
-    $row['is_host'] = ((int)$row['is_host'] === 1); 
-    $players[] = $row;
+// 7. Data Gathering for Response
+$room = DB::fetch("SELECT * FROM rooms WHERE id = ?", [$room_id]);
+$players = DB::fetchAll("SELECT id, username, avatar, score, is_host FROM players WHERE room_id = ? ORDER BY score DESC", [$room_id]);
+foreach($players as &$p) {
+    $p['is_me'] = ($p['id'] == $player_id);
+    $p['is_host'] = (bool)$p['is_host'];
 }
 
-// Round
-$current_round_data = [];
+$current_round = [];
 if ($round) {
-    $current_round_data = [
+    // Refresh round after processing
+    $round = DB::fetch("SELECT *, TIMESTAMPDIFF(SECOND, NOW(), end_time) as time_left FROM rounds WHERE id = ?", [$round['id']]);
+    $current_round = [
         'id' => $round['id'],
         'status' => $round['status'],
-        'drawer_id' => $round['drawer_id'],
-        'time_left' => ($round['status'] == 'choosing' || $round['status'] == 'drawing' || $round['status'] == 'countdown' || $round['status'] == 'ended' || $round['status'] == 'game_over') ? max(0, intval($round['sql_time_left'])) : 0,
-        'round_number' => $round['round_number'], // Global round
-        'elapsed' => $round['elapsed'] ?? 0
+        'drawer_id' => (int)$round['drawer_id'],
+        'time_left' => max(0, (int)$round['time_left']),
+        'round_number' => (int)$round['round_number']
     ];
-    
-    // Word Logic
-    $word_display = "";
+
     if ($round['word_id']) {
-        $wq = mysqli_query($conn, "SELECT word FROM words WHERE id = {$round['word_id']}");
-        $wrow = mysqli_fetch_assoc($wq);
-        $full_word = $wrow['word'];
-        
-        if ($player_id == $round['drawer_id'] || $round['status'] === 'ended') {
-            $word_display = $full_word;
+        $word_row = DB::fetch("SELECT word FROM words WHERE id = ?", [$round['word_id']]);
+        $word = $word_row['word'] ?? '';
+        if ($player_id == $round['drawer_id'] || $round['status'] == 'ended') {
+            $current_round['word'] = $word;
         } else {
-            // Mask it
-            $mask_indices = $round['hints_mask'] ? explode(',', $round['hints_mask']) : [];
-            for ($i=0; $i < strlen($full_word); $i++) {
-                if ($full_word[$i] === ' ') {
-                    $word_display .= "  "; // Double space for gap
-                } elseif (in_array($i, $mask_indices)) {
-                    $word_display .= $full_word[$i] . " ";
-                } else {
-                    $word_display .= "_ ";
-                }
+            // Masking logic
+            $hints = !empty($round['hints_mask']) ? explode(',', $round['hints_mask']) : [];
+            $masked = "";
+            for($i=0;$i<strlen($word);$i++) {
+                if ($word[$i] == ' ') $masked .= "  ";
+                elseif (in_array($i, $hints)) $masked .= $word[$i] . " ";
+                else $masked .= "_ ";
             }
+            $current_round['word'] = trim($masked);
         }
     }
-    $current_round_data['word'] = trim($word_display);
-    
-    // Choosing Options
-    if ($round['status'] === 'choosing' && $round['drawer_id'] == $player_id) {
-         if (!empty($round['word_options'])) {
-             $ids = $round['word_options'];
-             $words_to_choose = []; 
-             $wq = mysqli_query($conn, "SELECT * FROM words WHERE id IN ($ids)");
-             while($w = mysqli_fetch_assoc($wq)) $words_to_choose[] = $w;
-             $current_round_data['options'] = $words_to_choose;
-         } else {
-             // Generate
-             $wq = mysqli_query($conn, "SELECT * FROM words ORDER BY RAND() LIMIT 3");
-             $words = []; $ids = [];
-             while($w = mysqli_fetch_assoc($wq)) { $words[] = $w; $ids[] = $w['id']; }
-             $ids_str = implode(',', $ids);
-             mysqli_query($conn, "UPDATE rounds SET word_options = '$ids_str' WHERE id = {$round['id']}");
-             $current_round_data['options'] = $words;
-         }
+
+    if ($round['status'] == 'choosing' && $round['drawer_id'] == $player_id) {
+        $ids_str = $round['word_options'] ?: '0';
+        $ids = explode(',', $ids_str);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $current_round['options'] = DB::fetchAll("SELECT * FROM words WHERE id IN ($placeholders)", $ids);
     }
 }
 
 jsonResponse([
     'room' => $room,
     'players' => $players,
-    'round' => $current_round_data,
+    'round' => $current_round,
     'me' => $player_id
 ]);
 
+function startNextTurn($room_id) {
+    $done = DB::fetch("SELECT COUNT(*) as c FROM rounds WHERE room_id = ? AND status NOT IN ('game_over', 'choosing')", [$room_id])['c'];
+    $room = DB::fetch("SELECT max_rounds FROM rooms WHERE id = ?", [$room_id]);
+    $players = DB::fetchAll("SELECT id FROM players WHERE room_id = ? ORDER BY turn_order ASC, id ASC", [$room_id]);
+    
+    $num = count($players);
+    if ($num == 0) return;
 
-function startNextTurn($conn, $room_id) {
-    // Determine Next Turn
-    $cnt_q = mysqli_query($conn, "SELECT COUNT(*) as c FROM rounds WHERE room_id = $room_id AND status NOT IN ('game_over', 'choosing')");
-    $cnt_row = mysqli_fetch_assoc($cnt_q);
-    $turns_done = intval($cnt_row['c']);
-    
-    // Get constraints
-    $r_res = mysqli_query($conn, "SELECT max_rounds FROM rooms WHERE id = $room_id");
-    $r_info = mysqli_fetch_assoc($r_res);
-    $max_rounds = intval($r_info['max_rounds']);
-    
-    $p_res = mysqli_query($conn, "SELECT id FROM players WHERE room_id = $room_id ORDER BY turn_order ASC, id ASC");
-    $players = [];
-    while($p = mysqli_fetch_assoc($p_res)) $players[] = $p['id'];
-    
-    $num_players = count($players);
-    if ($num_players === 0) return; // Nobody left
-    
-    $global_round = floor($turns_done / $num_players) + 1;
-    $turn_index = $turns_done % $num_players;
-    
-    if ($global_round > $max_rounds) {
-        mysqli_query($conn, "UPDATE rooms SET status = 'finished' WHERE id = $room_id");
-        // Create Game Over Timer Round
-        mysqli_query($conn, "INSERT INTO rounds (room_id, round_number, status, start_time, end_time) VALUES ($room_id, 0, 'game_over', NOW(), DATE_ADD(NOW(), INTERVAL 15 SECOND))");
+    $global = floor($done / $num) + 1;
+    if ($global > $room['max_rounds']) {
+        DB::query("UPDATE rooms SET status = 'finished' WHERE id = ?", [$room_id]);
+        $end_time_go = date('Y-m-d H:i:s', time() + 15);
+        DB::query("INSERT INTO rounds (room_id, round_number, status, end_time) VALUES (?, 0, 'game_over', ?)", [$room_id, $end_time_go]);
         return;
     }
-    
-    mysqli_query($conn, "UPDATE rooms SET current_round = $global_round WHERE id = $room_id");
-    
-    // Pick drawer based on index in current players list
-    $drawer_id = $players[$turn_index];
 
-    // Pre-generate word options
-    $wq = mysqli_query($conn, "SELECT id FROM words ORDER BY RAND() LIMIT 3");
-    $opt_ids = [];
-    while($w = mysqli_fetch_assoc($wq)) $opt_ids[] = $w['id'];
-    $ids_str = implode(',', $opt_ids);
-    
-    // Create Round with 7 second choosing timer
-    mysqli_query($conn, "INSERT INTO rounds (room_id, round_number, drawer_id, status, word_options, start_time, end_time) 
-                        VALUES ($room_id, $global_round, $drawer_id, 'choosing', '$ids_str', NOW(), DATE_ADD(NOW(), INTERVAL 7 SECOND))");
+    DB::query("UPDATE rooms SET current_round = ? WHERE id = ?", [$global, $room_id]);
+    $drawer = $players[$done % $num]['id'];
+    $opts = DB::fetchAll("SELECT id FROM words ORDER BY RAND() LIMIT 3");
+    $opt_str = implode(',', array_column($opts, 'id'));
+
+    $now_db = date('Y-m-d H:i:s');
+    $end_time_ch = date('Y-m-d H:i:s', time() + 15);
+    DB::query("INSERT INTO rounds (room_id, round_number, drawer_id, status, word_options, start_time, end_time) 
+               VALUES (?, ?, ?, 'choosing', ?, ?, ?)", 
+               [$room_id, $global, $drawer, $opt_str, $now_db, $end_time_ch]);
 }
-?>

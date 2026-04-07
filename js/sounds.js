@@ -8,10 +8,10 @@ class SoundManager {
         this.config = null;
 
         const unlock = async () => {
-            this.init();
+            this.init(); // Create the context if it doesn't exist
             if (this.ctx) {
                 try {
-                    if (this.ctx.state === 'suspended') {
+                    if (this.ctx.state !== 'running') {
                         await this.ctx.resume();
                     }
                     if (this.ctx.state === 'running') {
@@ -51,8 +51,7 @@ class SoundManager {
             } catch (e) { return; }
         }
         if (this.ctx.state === 'suspended') {
-            // Only try to resume; don't force it or log errors if it fails due to lack of user gesture
-            this.ctx.resume().catch(() => { });
+            // Do NOT try to resume here; it triggers warnings if called outside gestures
         }
     }
 
@@ -60,7 +59,8 @@ class SoundManager {
         if (!this.enabled) return;
         this.init();
         if (this.ctx && this.ctx.state === 'suspended') {
-            this.ctx.resume().then(() => this.trigger(name));
+            // Only resume if initiated by a gesture; otherwise trigger() will just fail silently or wait
+            this.ctx.resume().then(() => this.trigger(name)).catch(() => { });
         } else {
             this.trigger(name);
         }

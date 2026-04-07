@@ -1,77 +1,199 @@
 <?php
+/**
+ * Core Database & System Configuration
+ * Implements PDO for security and .env for configuration.
+ */
+
+// 1. Environment & Timezone Alignment
+date_default_timezone_set('UTC');
+$envFile = __DIR__ . '/../.env';
+if (file_exists($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue;
+        list($name, $value) = explode('=', $line, 2);
+        $_ENV[trim($name)] = trim($value);
+    }
+}
+
+// 2. Application Constants
+define('APP_ENV', $_ENV['ENVIRONMENT'] ?? 'production');
+define('IS_LOCAL', APP_ENV === 'local');
+
 // Determine the dynamic base path securely
 $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
 $base_path = '/';
 if ($scriptName) {
-    // Check if we are in admin or api subfolder
-    $api_pos = strpos($scriptName, '/api/');
-    $admin_pos = strpos($scriptName, '/admin/');
-    
-    if ($api_pos !== false) {
-        $base_path = substr($scriptName, 0, $api_pos) . '/';
-    } elseif ($admin_pos !== false) {
-        $base_path = substr($scriptName, 0, $admin_pos) . '/';
-    } else {
+    foreach (['/api/', '/admin/'] as $dir) {
+        if (($pos = strpos($scriptName, $dir)) !== false) {
+            $base_path = substr($scriptName, 0, $pos) . '/';
+            break;
+        }
+    }
+    if ($base_path === '/') {
         $base_path = rtrim(dirname($scriptName), '/\\') . '/';
     }
 }
-if ($base_path == '/' || $base_path == '//') $base_path = '/';
-define('APP_ROOT', $base_path);
+define('APP_ROOT', ($base_path === '//') ? '/' : $base_path);
 
-// Prevent unwanted output
-ob_start();
-error_reporting(E_ALL);
-ini_set('display_errors', 1); // Enable error reporting for debugging
+// 3. Security Headers
+header("X-Content-Type-Options: nosniff");
+header("X-Frame-Options: SAMEORIGIN");
+header("X-XSS-Protection: 1; mode=block");
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-// Database configuration
-$is_local = true;
-if (isset($_SERVER['HTTP_HOST'])) {
-    $hostname = explode(':', $_SERVER['HTTP_HOST'])[0];
-    if ($hostname !== 'localhost' && $hostname !== '127.0.0.1' && $hostname !== '::1') {
-        $is_local = false;
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+    exit;
+}
+
+// 4. Logging System
+class Logger {
+    public static function log($message, $level = 'INFO') {
+        $logFile = __DIR__ . '/../logs/app.log';
+        if (!is_dir(dirname($logFile))) mkdir(dirname($logFile), 0755, true);
+        $timestamp = date('Y-m-d H:i:s');
+        file_put_contents($logFile, "[$timestamp] [$level] $message" . PHP_EOL, FILE_APPEND);
     }
 }
 
-if ($is_local) {
-    // Local
-    $host = 'localhost';
-    $user = 'root';
-    $pass = '';
-    $db_name = 'drawguess';
-} else {
-    // Production
-    $host = 'localhost';
-    $user = 'u167160735_drawguess';
-    $pass = 'DrawGuess@1234#';
-    $db_name = 'u167160735_drawguess';
+// 5. Rate Limiting (Session-based for scale)
+function checkRateLimit($limit = 500, $seconds = 60) {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    $now = time();
+    $key = "rl_" . md5($_SERVER['REMOTE_ADDR']);
+    if (!isset($_SESSION[$key]) || ($now - $_SESSION[$key]['start']) > $seconds) {
+        $_SESSION[$key] = ['count' => 1, 'start' => $now];
+    } else {
+        $_SESSION[$key]['count']++;
+        if ($_SESSION[$key]['count'] > $limit) {
+            jsonResponse(['error' => 'Rate limit exceeded. Please wait.'], false, 429);
+        }
+    }
 }
 
+// Call rate limit for all API requests
+if (strpos($_SERVER['SCRIPT_NAME'] ?? '', '/api/') !== false) {
+    checkRateLimit();
+}
 
-// Connect to MySQL
-$conn = @mysqli_connect($host, $user, $pass);
+// 6. Output Buffering & Error Handling
+ob_start();
+error_reporting(E_ALL);
+ini_set('display_errors', IS_LOCAL ? 1 : 0);
 
-if (!$conn) {
+function jsonResponse($data, $success = true, $code = 200) {
     ob_clean();
-    die(json_encode(["error" => "Connection failed: " . mysqli_connect_error()]));
+    http_response_code($code);
+    header('Content-Type: application/json');
+    $response = ['success' => $success];
+    if ($success) {
+        $response['data'] = $data;
+    } else {
+        $response['error'] = is_array($data) && isset($data['error']) ? $data['error'] : (is_string($data) ? $data : 'Unknown error');
+    }
+    echo json_encode($response);
+    exit;
 }
 
-// Create database if not exists
-$db_check = mysqli_query($conn, "SHOW DATABASES LIKE '$db_name'");
-if (!$db_check || mysqli_num_rows($db_check) == 0) {
-    mysqli_query($conn, "CREATE DATABASE IF NOT EXISTS $db_name");
+set_exception_handler(function($e) {
+    Logger::log($e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine(), 'ERROR');
+    jsonResponse(['error' => IS_LOCAL ? $e->getMessage() : 'A server error occurred'], false, 500);
+});
+
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    if (!(error_reporting() & $errno)) return false;
+    throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
+});
+
+// 5. Database Connection (PDO)
+$host = $_ENV['DB_HOST'] ?? 'localhost';
+$db   = $_ENV['DB_NAME'] ?? 'drawguess_v2';
+$user = $_ENV['DB_USER'] ?? 'root';
+$pass = $_ENV['DB_PASS'] ?? '';
+$charset = 'utf8mb4';
+
+$dsn = "mysql:host=$host;charset=$charset";
+$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES   => false,
+];
+
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
+    
+    // Ensure DB exists
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $pdo->exec("USE `$db` ");
+    
+    // Sync DB Timezone to UTC
+    $pdo->exec("SET time_zone = '+00:00'");
+
+} catch (\PDOException $e) {
+    die(json_encode(["success" => false, "error" => "Connection failed: " . $e->getMessage()]));
 }
 
-if (!mysqli_select_db($conn, $db_name)) {
-    ob_clean();
-    die(json_encode(["error" => "Failed to select database: " . mysqli_error($conn)]));
-}
+// Backward compatibility (optional for migration)
+$conn = mysqli_connect($host, $user, $pass, $db);
 mysqli_set_charset($conn, "utf8mb4");
 
-// Auto-create tables if they don't exist (Robust Setup)
-$tbl_check = mysqli_query($conn, "SHOW TABLES LIKE 'rooms'");
-if ($tbl_check && mysqli_num_rows($tbl_check) == 0) {
+/**
+ * DB Helper Class (Part of the "Model" foundation)
+ */
+class DB {
+    public static function query($sql, $params = []) {
+        global $pdo;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt;
+    }
+    public static function fetch($sql, $params = []) {
+        return self::query($sql, $params)->fetch();
+    }
+    public static function fetchAll($sql, $params = []) {
+        return self::query($sql, $params)->fetchAll();
+    }
+    public static function insert($table, $data) {
+        $keys = array_keys($data);
+        $fields = implode('`, `', $keys);
+        $placeholders = implode(', ', array_fill(0, count($keys), '?'));
+        $sql = "INSERT INTO `$table` (`$fields`) VALUES ($placeholders)";
+        self::query($sql, array_values($data));
+        global $pdo;
+        return $pdo->lastInsertId();
+    }
+}
+
+/**
+ * Legacy Support: Sanitize inputs for old mysqli code
+ */
+function sanitize($conn, $input) {
+    if (is_array($input)) return array_map(fn($v) => sanitize($conn, $v), $input);
+    return mysqli_real_escape_string($conn, htmlspecialchars(strip_tags(trim($input))));
+}
+
+/**
+ * View Helper Class (Part of the "View" foundation)
+ */
+class View {
+    public static function render($path, $data = []) {
+        extract($data);
+        $fullPath = __DIR__ . '/../views/' . $path . '.php';
+        if (file_exists($fullPath)) {
+            include $fullPath;
+        } else {
+            throw new Exception("View $path not found");
+        }
+    }
+}
+
+// Initialize tables if missing
+$tables = $pdo->query("SHOW TABLES LIKE 'rooms'")->rowCount();
+if ($tables == 0) {
     // Rooms
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS rooms (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS rooms (
         id INT AUTO_INCREMENT PRIMARY KEY,
         room_code VARCHAR(10) NOT NULL UNIQUE,
         host_id INT,
@@ -81,33 +203,26 @@ if ($tbl_check && mysqli_num_rows($tbl_check) == 0) {
         status ENUM('lobby', 'playing', 'finished') DEFAULT 'lobby',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
-    
+
     // Avatars
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS avatars (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS avatars (
         id INT AUTO_INCREMENT PRIMARY KEY,
         emoji VARCHAR(10) NOT NULL UNIQUE
     )");
-
-    // Seed Avatars
-    mysqli_query($conn, "INSERT IGNORE INTO avatars (emoji) VALUES ('🐱'), ('🐶'), ('🦁'), ('🦊'), ('🐸'), ('🐼'), ('🐨'), ('🐷'), ('🐵'), ('🦄'), ('🐙'), ('🐯')");
+    $pdo->exec("INSERT IGNORE INTO avatars (emoji) VALUES ('🐱'), ('🐶'), ('🦁'), ('🦊'), ('🐸'), ('🐼'), ('🐨'), ('🐷'), ('🐵'), ('🦄'), ('🐙'), ('🐯')");
 
     // Admins
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS admins (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS admins (
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
-    
-    // Seed default admin if none exists
-    $check_admin = mysqli_query($conn, "SELECT id FROM admins");
-    if (mysqli_num_rows($check_admin) == 0) {
-        $default_pass = password_hash('admin123', PASSWORD_DEFAULT);
-        mysqli_query($conn, "INSERT INTO admins (username, password_hash) VALUES ('admin', '$default_pass')");
-    }
+    $default_pass = password_hash('admin123', PASSWORD_DEFAULT);
+    $pdo->exec("INSERT IGNORE INTO admins (username, password_hash) VALUES ('admin', '$default_pass')");
 
     // Players
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS players (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS players (
         id INT AUTO_INCREMENT PRIMARY KEY,
         room_id INT NOT NULL,
         username VARCHAR(50) NOT NULL,
@@ -122,14 +237,18 @@ if ($tbl_check && mysqli_num_rows($tbl_check) == 0) {
     )");
 
     // Words
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS words (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS words (
         id INT AUTO_INCREMENT PRIMARY KEY,
         word VARCHAR(50) NOT NULL UNIQUE,
         difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'easy'
     )");
-    
+    $pdo->exec("INSERT IGNORE INTO words (word, difficulty) VALUES 
+    ('Cat', 'easy'), ('Sun', 'easy'), ('Apple', 'easy'), ('House', 'easy'), ('Tree', 'easy'),
+    ('Bicycle', 'medium'), ('Guitar', 'medium'), ('Pizza', 'medium'), ('Helicopter', 'medium'),
+    ('Astronaut', 'hard'), ('Sphinx', 'hard'), ('Waterfall', 'hard')");
+
     // Rounds
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS rounds (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS rounds (
         id INT AUTO_INCREMENT PRIMARY KEY,
         room_id INT NOT NULL,
         round_number INT NOT NULL,
@@ -146,7 +265,7 @@ if ($tbl_check && mysqli_num_rows($tbl_check) == 0) {
     )");
 
     // Strokes
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS strokes (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS strokes (
         id INT AUTO_INCREMENT PRIMARY KEY,
         round_id INT NOT NULL,
         color VARCHAR(20) DEFAULT '#000000',
@@ -158,7 +277,7 @@ if ($tbl_check && mysqli_num_rows($tbl_check) == 0) {
     )");
 
     // Messages
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS messages (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS messages (
         id INT AUTO_INCREMENT PRIMARY KEY,
         room_id INT NOT NULL,
         round_id INT,
@@ -166,61 +285,23 @@ if ($tbl_check && mysqli_num_rows($tbl_check) == 0) {
         message VARCHAR(255),
         type ENUM('chat', 'guess', 'system', 'reaction') DEFAULT 'chat',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX(room_id),
+        INDEX(type),
         FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
     )");
 
+    // Index existing tables for high-performance lookups
+    $pdo->exec("CREATE INDEX idx_player_room ON players(room_id)");
+    $pdo->exec("CREATE INDEX idx_stroke_round ON strokes(round_id)");
+    $pdo->exec("CREATE INDEX idx_round_room ON rounds(room_id)");
+
     // Settings
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS settings (
+    $pdo->exec("CREATE TABLE IF NOT EXISTS settings (
         setting_key VARCHAR(50) PRIMARY KEY,
         setting_value TEXT
     )");
-
-    // Seed Default Settings
-    mysqli_query($conn, "INSERT IGNORE INTO settings (setting_key, setting_value) VALUES 
+    $pdo->exec("INSERT IGNORE INTO settings (setting_key, setting_value) VALUES 
     ('lobby_music_enabled', '0'),
     ('lobby_music_url', ''),
     ('music_volume', '0.5')");
-
-    // Seed Words
-    mysqli_query($conn, "INSERT IGNORE INTO words (word, difficulty) VALUES 
-    ('Cat', 'easy'), ('Sun', 'easy'), ('Apple', 'easy'), ('House', 'easy'), ('Tree', 'easy'),
-    ('Bicycle', 'medium'), ('Guitar', 'medium'), ('Pizza', 'medium'), ('Helicopter', 'medium'),
-    ('Astronaut', 'hard'), ('Sphinx', 'hard'), ('Waterfall', 'hard')");
 }
-
-// Common helper functions
-function jsonResponse($data, $success = true) {
-    ob_clean();
-    header('Content-Type: application/json');
-    
-    $response = ['success' => $success];
-    
-    if ($success) {
-        $response['data'] = $data;
-    } else {
-        // If error, flatten it to top level if passed as ['error' => 'msg']
-        if (is_array($data) && isset($data['error'])) {
-            $response['error'] = $data['error'];
-        } else {
-            $response['error'] = is_string($data) ? $data : 'Unknown error';
-        }
-    }
-    
-    echo json_encode($response);
-    exit;
-}
-
-function sanitize($conn, $input) {
-    return mysqli_real_escape_string($conn, htmlspecialchars(strip_tags(trim($input))));
-}
-
-// Handle CORS
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-

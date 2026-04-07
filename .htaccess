@@ -1,21 +1,40 @@
 RewriteEngine On
-# Security: Disable directory browsing
-Options -Indexes
+DirectoryIndex index.php
 
-# 1. Clean Room URLs: /room/CODE -> game.php?room=CODE
-RewriteRule ^room/([A-Za-z0-9]+)/?$ game.php?room=$1 [QSA,L]
+# 0. Modern Security: Block sensitive files (e.g., .env)
+RedirectMatch 404 /\.git
+RedirectMatch 404 /\.env
+RedirectMatch 404 /composer\.(json|lock)
+RedirectMatch 404 /package(-lock)?\.json
 
-# 2. Admin URLs (Clean Routes)
+# 1. SSL Redirect (Exclude localhost)
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|192\.168\.)
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# 2. Prevent directory indexing gracefully
+<IfModule mod_autoindex.c>
+    Options -Indexes
+</IfModule>
+
+# 3. Explicit Backend & Component Routes
+# These provide clean URLs for core functionality
+
+# Game Room: /room/CODE -> index.php (handled by MVC controller)
+RewriteRule ^room/([A-Za-z0-9]+)/?$ index.php [QSA,L]
+
+# Admin Interface: Clean Routes
 RewriteRule ^admin/?$ admin/index.php [L]
+RewriteRule ^admin/login/?$ admin/login.php [L]
 RewriteRule ^admin/words/?$ admin/words.php [L]
 RewriteRule ^admin/avatars/?$ admin/avatars.php [L]
 RewriteRule ^admin/music/?$ admin/music.php [L]
 
-# 3. Handle index.php cleaning (Optional but good for SEO)
-RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /.*index\.php\ HTTP/
-RewriteRule ^(.*)index\.php$ $1 [R=301,L]
+# 4. Fallback Routing (Enables SPA-like architecture)
+# If the request is for a real file/directory, serve it directly
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
 
-# 4. Fallback for non-existent files to index.php (Enables SPA-like routing)
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule . index.php [L]
+# Otherwise, route through index.php
+RewriteRule . index.php [L,QSA]
