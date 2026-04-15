@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feedback - Draw & Guess</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <?php
+    $base_path = '/drawguess/';
+    $seo_title       = 'Send Feedback';
+    $seo_description = 'Share your feedback about Draw & Guess Royale! Rate your experience and help us improve the game for everyone.';
+    $seo_keywords    = 'drawguess feedback, game feedback, report bug, suggest feature';
+    $seo_canonical   = 'https://drawguess.irfanmanzoor.in/feedback';
+    include __DIR__ . '/views/partials/seo_head.php';
+    ?>
     <style>
         body { font-family: 'Fredoka', sans-serif; background-color: #fdfbf7; background-image: radial-gradient(#f1f3f5 1.2px, transparent 1.2px), radial-gradient(#f1f3f5 1.2px, transparent 1.2px); background-size: 24px 24px; background-position: 0 0, 12px 12px; }
         .neo-border { border: 3px solid #1e1e1e; box-shadow: 6px 6px 0px #1e1e1e; }

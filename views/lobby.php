@@ -3,12 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Draw & Guess - Creative Drawing </title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="manifest" href="<?= $base_path ?>manifest.json">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖊️</text></svg>">
-    <meta name="theme-color" content="#facc15">
+    <?php
+    $seo_title       = 'Play Free Multiplayer Drawing Game';
+    $seo_description = 'Draw & Guess Royale — the free real-time multiplayer drawing and guessing game. Create a room, invite friends and see who can draw and guess the fastest!';
+    $seo_keywords    = 'draw and guess, multiplayer drawing game, online skribbl, free guessing game, drawguess royale, real-time drawing';
+    $seo_canonical   = 'https://drawguess.irfanmanzoor.in/';
+    include __DIR__ . '/partials/seo_head.php';
+    ?>
+    <!-- Structured Data: VideoGame Schema -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Draw & Guess Royale",
+        "url": "https://drawguess.irfanmanzoor.in/",
+        "description": "A free, real-time multiplayer drawing and guessing game. Create a room, invite friends and race to guess the word!",
+        "genre": ["Casual", "Multiplayer", "Party"],
+        "numberOfPlayers": { "@type": "QuantitativeValue", "minValue": 2, "maxValue": 8 },
+        "playMode": "MultiPlayer",
+        "applicationCategory": "Game",
+        "operatingSystem": "Any (Browser-based)",
+        "author": {
+            "@type": "Person",
+            "name": "Irfan Manzoor",
+            "url": "https://irfanmanzoor.in"
+        },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
+    </script>
     <script>
         const APP_ROOT = '<?= rtrim($base_path, "/") . "/" ?>';
     </script>
