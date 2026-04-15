@@ -3,12 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <?php
-    $seo_title       = 'Play Time — Live Drawing Room';
-    $seo_description = 'You are in a live Draw & Guess Royale room! Draw your word or guess what others are drawing in real-time. Fast-paced multiplayer fun!';
-    $seo_og_type     = 'game';
-    include __DIR__ . '/partials/seo_head.php';
-    ?>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+      <link rel="shortcut icon" href="<?= $base_path ?>assets/pwa/favicon.png" type="image/png">
+    <title>Draw & Guess - Play Time!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖊️</text></svg>">
+    <link rel="manifest" href="<?= $base_path ?>manifest.json">
+    <meta name="theme-color" content="#ffeb3b">
     <script>
         const APP_ROOT = '<?= $base_path ?>';
     </script>

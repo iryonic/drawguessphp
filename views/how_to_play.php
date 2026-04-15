@@ -3,13 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <?php
-    $seo_title       = 'How to Play — Complete Game Guide';
-    $seo_description = 'Learn everything about Draw & Guess Royale — scoring system, drawing tools, round mechanics, pro tips, and FAQ. Become the ultimate drawer and guesser!';
-    $seo_keywords    = 'how to play draw and guess, drawing game guide, drawguess rules, scoring system, drawing tips';
-    $seo_canonical   = 'https://drawguess.irfanmanzoor.in/how-to-play';
-    include __DIR__ . '/partials/seo_head.php';
-    ?>
+    <title>How to Play — Draw & Guess Royale</title>
+    <meta name="description" content="Learn how to play Draw & Guess Royale. Master the drawing tools, scoring system, round mechanics, and pro tips to dominate every game.">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script>
