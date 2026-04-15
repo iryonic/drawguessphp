@@ -4,7 +4,7 @@ class SoundManager {
         this.ctx = null;
         this.unlocked = false;
         this.bgm = null;
-        this.bgmEnabled = false;
+        this.bgmEnabled = true;
         this.config = null;
 
         const unlock = async () => {
@@ -77,6 +77,12 @@ class SoundManager {
             case 'start': this.arpeggio([523, 659, 784, 1046], 0.08); break;
             case 'win': this.arpeggio([523, 659, 784, 1046, 1318, 1568, 2093], 0.1); break;
             case 'success': this.arpeggio([784, 1046, 1318], 0.08); break;
+            case 'achieve':
+                this.tone(523, 'sine', 0.15, 0.2);
+                setTimeout(() => this.tone(659, 'sine', 0.15, 0.2), 100);
+                setTimeout(() => this.tone(784, 'sine', 0.15, 0.2), 200);
+                setTimeout(() => this.tone(1046, 'sine', 0.3, 0.25), 300);
+                break;
         }
     }
 

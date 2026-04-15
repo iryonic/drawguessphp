@@ -125,3 +125,5 @@ async function joinRoom() {
         showError(res.error || 'Failed to join room');
     }
 }
+
+// End of Lobby Script

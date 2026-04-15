@@ -14,10 +14,8 @@
     <meta name="theme-color" content="#ffeb3b">
     <script>
         const APP_ROOT = '<?= $base_path ?>';
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register(APP_ROOT + 'sw.js?v=NUCLEAR_RESET').catch(() => {});
-        }
     </script>
+    <script src="<?= $base_path ?>js/pwa.js?v=STABLE_V17"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -232,6 +230,10 @@
 
         <!-- Mobile Bottom Section (Persistent Split) -->
         <div id="mobile-panel" class="lg:hidden bg-white border-t-[3px] border-ink flex flex-col transition-all duration-300 h-[var(--mobile-panel-h)] overflow-hidden relative z-20">
+            <!-- Pull Handle -->
+            <div onclick="toggleMobilePanel()" class="h-6 flex items-center justify-center border-b border-ink/10 cursor-pointer hover:bg-gray-50 shrink-0">
+                <div class="w-10 h-1 bg-ink/20 rounded-full"></div>
+            </div>
             <div id="view-rank" class="flex flex-1 p-4 overflow-hidden flex-col">
                  <h2 class="font-black text-lg mb-3 border-b-2 border-ink pb-1 uppercase tracking-wide">🏆 Leaderboard</h2>
                  <div id="player-list-mobile" class="space-y-3 overflow-y-auto flex-1 no-scrollbar pb-2"></div>
@@ -269,6 +271,27 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- PWA Install Prompt -->
+    <div id="pwa-install-prompt" class="fixed bottom-6 left-6 right-6 md:left-auto md:right-10 md:w-96 z-[200] hidden">
+        <div class="bg-pop-yellow border-[3.5px] border-ink rounded-[1.5rem] p-5 shadow-[10px_10px_0px_#1e1e1e] transform transition-all hover:scale-102 flex flex-col gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-white border-[2.5px] border-ink rounded-xl flex items-center justify-center text-3xl shadow-[3px_3px_0px_#000]">
+                    🖊️
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-black text-sm uppercase tracking-tight leading-none mb-1">Install DrawGuess</h3>
+                    <p class="text-[10px] font-bold text-ink/60 leading-snug">Add to home screen for absolute zero latency & full screen vibes!</p>
+                </div>
+                <button id="pwa-close" class="text-xl font-black opacity-30 hover:opacity-100">×</button>
+            </div>
+            <div class="flex gap-3">
+                <button id="pwa-install-btn" class="flex-1 bg-ink text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors shadow-[3px_3px_0px_rgba(255,255,255,0.2)] active:translate-y-0.5">
+                    Install Now 🚀
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="<?= $base_path ?>js/sounds.js?v=NUCLEAR_RESET"></script>
     <script src="<?= $base_path ?>js/game.js?v=NUCLEAR_RESET"></script>
 </body>

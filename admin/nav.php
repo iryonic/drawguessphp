@@ -14,6 +14,8 @@
                     'words.php' => ['Words', 'admin/words'],
                     'avatars.php' => ['Avatars', 'admin/avatars'],
                     'music.php' => ['Music', 'admin/music'],
+                    'feedbacks.php' => ['Feedbacks', 'admin/feedbacks'],
+                    'profile.php' => ['Profile', 'admin/profile'],
                 ];
                 foreach($links as $file => $meta):
                     $active = ($current == $file);
@@ -32,6 +34,8 @@
                      <option value="<?= APP_ROOT ?>admin/words" <?= $current=='words.php'?'selected':'' ?>>Words</option>
                      <option value="<?= APP_ROOT ?>admin/avatars" <?= $current=='avatars.php'?'selected':'' ?>>Avatars</option>
                      <option value="<?= APP_ROOT ?>admin/music" <?= $current=='music.php'?'selected':'' ?>>Music</option>
+                     <option value="<?= APP_ROOT ?>admin/feedbacks" <?= $current=='feedbacks.php'?'selected':'' ?>>Feedbacks</option>
+                     <option value="<?= APP_ROOT ?>admin/profile" <?= $current=='profile.php'?'selected':'' ?>>Profile</option>
                  </select>
             </div>
         </div>

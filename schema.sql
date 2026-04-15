@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS strokes (
     size INT DEFAULT 5,
     points TEXT NOT NULL, -- JSON array of {x, y}
     sequence_id INT NOT NULL, -- To order strokes correctly client side
+    is_start BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
 );
@@ -64,6 +65,16 @@ CREATE TABLE IF NOT EXISTS messages (
     type ENUM('chat', 'guess', 'system') DEFAULT 'chat',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS feedbacks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    player_id INT, -- Optional link to player
+    username VARCHAR(50),
+    message TEXT NOT NULL,
+    rating TINYINT DEFAULT 5,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL
 );
 
 -- Seed some words

@@ -34,6 +34,7 @@ if ($action === 'draw') {
     $size = intval($_POST['size'] ?? 5);
     $points = $_POST['points'] ?? '[]';
     $seq = intval($_POST['seq'] ?? 0);
+    $is_start = ($_POST['is_start'] ?? 'false') === 'true';
 
     // Basic JSON validation
     if (json_decode($points) === null && json_last_error() !== JSON_ERROR_NONE) {
@@ -45,7 +46,8 @@ if ($action === 'draw') {
         'color' => $color,
         'size' => $size,
         'points' => $points,
-        'sequence_id' => $seq
+        'sequence_id' => $seq,
+        'is_start' => $is_start
     ]);
 
     jsonResponse(['success' => true, 'id' => $sid]);
@@ -56,14 +58,14 @@ if ($action === 'clear') {
     if ($player['id'] != $round['drawer_id']) {
         jsonResponse(['error' => 'Not your turn'], false);
     }
-    DB::insert('strokes', [
+    $sid = DB::insert('strokes', [
         'round_id' => $round['id'],
         'color' => 'CLEAR',
         'size' => 0,
         'points' => '[]',
         'sequence_id' => 999999
     ]);
-    jsonResponse(['success' => true]);
+    jsonResponse(['success' => true, 'id' => $sid]);
 }
 
 // 5. UNDO ACTION
@@ -71,20 +73,20 @@ if ($action === 'undo') {
     if ($player['id'] != $round['drawer_id']) {
         jsonResponse(['error' => 'Not your turn'], false);
     }
-    DB::insert('strokes', [
+    $sid = DB::insert('strokes', [
         'round_id' => $round['id'],
         'color' => 'UNDO',
         'size' => 0,
         'points' => '[]',
         'sequence_id' => 888888
     ]);
-    jsonResponse(['success' => true]);
+    jsonResponse(['success' => true, 'id' => $sid]);
 }
 
 // 6. FETCH STROKES ACTION
 if ($action === 'fetch') {
     $last_id = intval($_GET['last_id'] ?? 0);
-    $strokes = DB::fetchAll("SELECT id, color, size, points FROM strokes WHERE round_id = ? AND id > ? ORDER BY id ASC", [$round['id'], $last_id]);
+    $strokes = DB::fetchAll("SELECT id, color, size, points, is_start FROM strokes WHERE round_id = ? AND id > ? ORDER BY id ASC", [$round['id'], $last_id]);
     
     foreach ($strokes as &$s) {
         $s['points'] = json_decode($s['points']);

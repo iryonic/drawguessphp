@@ -11,10 +11,8 @@
     <meta name="theme-color" content="#facc15">
     <script>
         const APP_ROOT = '<?= rtrim($base_path, "/") . "/" ?>';
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register(APP_ROOT + 'sw.js?v=NUCLEAR_RESET').catch(() => {});
-        }
     </script>
+    <script src="<?= $base_path ?>js/pwa.js?v=STABLE_V17"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -62,6 +60,11 @@
         .avatar-tile.selected { border-color: #1e1e1e; background: #c1fbb4ff; box-shadow: 4px 4px 0px #1e1e1e; transform: translate(-2px, -2px); }
         .modal-bg { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(5px); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        @keyframes slideUpFade {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up { animation: slideUpFade 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-4 py-12">
@@ -131,6 +134,10 @@
                 <a href="<?= $base_path ?>admin" class="hover:underline">Admin</a>
                 <span class="opacity-20">•</span>
                 <a href="<?= $base_path ?>how-to-play" class="hover:underline">How to Play</a>
+                <span class="opacity-20">•</span>
+                <button onclick="showPwaPrompt()" class="hover:underline flex items-center gap-1.5 text-pop-blue">
+                    <span>📲</span> Install App
+                </button>
             </div>
             <p class="text-[9px] tracking-widest font-black uppercase">designed & developed by <a href="https://irfanmanzoor.in">irfan manzoor</a></p>
         </footer>
@@ -142,5 +149,26 @@
 
     <!-- Modals -->
     <?php include __DIR__ . '/modals/create_room.php'; ?>
+
+    <!-- PWA Install Prompt (Hidden by default) -->
+    <div id="pwa-install-prompt" class="fixed bottom-6 left-6 right-6 md:left-auto md:right-10 md:w-96 z-[200] hidden">
+        <div class="bg-pop-yellow border-[3.5px] border-ink rounded-[1.5rem] p-5 shadow-[10px_10px_0px_#1e1e1e] transform transition-all hover:scale-102 flex flex-col gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-white border-[2.5px] border-ink rounded-xl flex items-center justify-center text-3xl shadow-[3px_3px_0px_#000]">
+                    🖊️
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-black text-sm uppercase tracking-tight leading-none mb-1">Install DrawGuess</h3>
+                    <p class="text-[10px] font-bold text-ink/60 leading-snug">Add to home screen for absolute zero latency & full screen vibes!</p>
+                </div>
+                <button id="pwa-close" class="text-xl font-black opacity-30 hover:opacity-100">×</button>
+            </div>
+            <div class="flex gap-3">
+                <button id="pwa-install-btn" class="flex-1 bg-ink text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors shadow-[3px_3px_0px_rgba(255,255,255,0.2)] active:translate-y-0.5">
+                    Install Now 🚀
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

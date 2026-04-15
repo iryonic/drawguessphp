@@ -112,6 +112,7 @@ let lastPos = { x: 0, y: 0 };
 let strokeHistory = [];
 let lastSendTime = 0;
 let timerInterval = null;
+let isFirstBatchOfStroke = true;
 
 // --- Initialization ---
 if (ui.roomCode) ui.roomCode.innerText = player.room_code || '????';
@@ -230,6 +231,7 @@ function startDraw(e) {
     painting = true;
     lastPos = getNormalizedPos(e);
     pointsBuffer = [lastPos];
+    isFirstBatchOfStroke = true;
     drawDot(lastPos.x, lastPos.y, gameState.color, gameState.size);
 }
 
@@ -240,7 +242,6 @@ function drawDot(nx, ny, color, size) {
     ctx.arc(x, y, size / 2, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    strokeHistory.push({ type: 'dot', x: nx, y: ny, color, size });
 }
 
 function drawLine(nx1, ny1, nx2, ny2, color, size) {
@@ -258,8 +259,48 @@ function drawLine(nx1, ny1, nx2, ny2, color, size) {
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
+}
 
-    strokeHistory.push({ type: 'line', x1: nx1, y1: ny1, x2: nx2, y2: ny2, color, size });
+function drawStrokeBatch(s) {
+    if (!s || !s.points || s.points.length === 0) return;
+    
+    ctx.beginPath();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = s.color;
+    ctx.fillStyle = s.color;
+    
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    const points = s.points;
+
+    if (points.length === 1) {
+        ctx.arc(points[0].x * w, points[0].y * h, s.size / 2, 0, Math.PI * 2);
+        ctx.fill();
+    } else {
+        ctx.lineWidth = s.size;
+        if (points.length > 2) {
+            ctx.moveTo(points[0].x * w, points[0].y * h);
+            for (let i = 1; i < points.length - 2; i++) {
+                const xc = (points[i].x + points[i + 1].x) / 2;
+                const yc = (points[i].y + points[i + 1].y) / 2;
+                ctx.quadraticCurveTo(points[i].x * w, points[i].y * h, xc * w, yc * h);
+            }
+            ctx.quadraticCurveTo(
+                points[points.length - 2].x * w,
+                points[points.length - 2].y * h,
+                points[points.length - 1].x * w,
+                points[points.length - 1].y * h
+            );
+        } else {
+            ctx.moveTo(points[0].x * w, points[0].y * h);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x * w, points[i].y * h);
+            }
+        }
+        ctx.stroke();
+    }
 }
 
 function draw(e) {
@@ -275,13 +316,11 @@ function draw(e) {
     ctx.lineJoin = 'round';
     ctx.strokeStyle = gameState.color;
 
+    // Drawing locally for instant feedback
     ctx.beginPath();
     ctx.moveTo(lastPos.x * factorW, lastPos.y * factorH);
     ctx.lineTo(pos.x * factorW, pos.y * factorH);
     ctx.stroke();
-
-    // Fix history before updating lastPos
-    strokeHistory.push({ type: 'line', x1: lastPos.x, y1: lastPos.y, x2: pos.x, y2: pos.y, color: gameState.color, size: gameState.size });
 
     lastPos = pos;
     pointsBuffer.push(pos);
@@ -302,18 +341,28 @@ function endDraw() {
 
 async function sendStrokes() {
     if (pointsBuffer.length === 0) return;
-
     if (painting && pointsBuffer.length === 1) return;
 
-    const pointsToSend = pointsBuffer;
+    const pointsToSend = [...pointsBuffer]; // Copy points to prevent reference issues
     const data = {
         token: player.token,
         action: 'draw',
         color: gameState.color,
         size: gameState.size,
-        points: JSON.stringify(pointsToSend)
+        points: JSON.stringify(pointsToSend),
+        is_start: isFirstBatchOfStroke ? 'true' : 'false'
     };
 
+    // Save to local history for Undo
+    strokeHistory.push({ 
+        color: gameState.color, 
+        size: gameState.size, 
+        points: pointsToSend, 
+        is_start: isFirstBatchOfStroke 
+    });
+    
+    isFirstBatchOfStroke = false;
+    
     if (painting && pointsBuffer.length > 0) {
         const last = pointsBuffer[pointsBuffer.length - 1];
         pointsBuffer = [last];
@@ -321,11 +370,21 @@ async function sendStrokes() {
         pointsBuffer = [];
     }
 
-    await fetch(`${APP_ROOT}api/draw_sync.php`, {
+    const response = await fetch(`${APP_ROOT}api/draw_sync.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams(data)
     });
+    const res = await response.json();
+    
+    // Update lastStrokeId to prevent syncDraw from fetching our own stroke back
+    if (res.success && res.data && res.data.id) {
+        const sid = parseInt(res.data.id);
+        if (sid > (gameState.lastStrokeId || 0)) {
+            gameState.lastStrokeId = sid;
+            updatePersist();
+        }
+    }
 }
 
 
@@ -501,6 +560,7 @@ async function syncState() {
             if (window.innerWidth < 1024) switchTab('rank');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
+        updateMobileLayout();
     } catch (e) {
         console.error("SyncState Error:", e);
     }
@@ -607,66 +667,20 @@ function renderLoop() {
             }
 
             if (s.color === 'UNDO') {
-                strokeHistory.pop(); // Remove last known stroke
-                // Full Redraw
+                if (strokeHistory.length > 0) {
+                    let popped;
+                    do {
+                        popped = strokeHistory.pop();
+                    } while (strokeHistory.length > 0 && popped && !popped.is_start);
+                }
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                const tempHistory = [...strokeHistory];
-                strokeHistory = []; // Reset because drawLine pushes to it
-                tempHistory.forEach(oldS => {
-                    if (oldS.type === 'dot') drawDot(oldS.x, oldS.y, oldS.color, oldS.size);
-                    else drawLine(oldS.x1, oldS.y1, oldS.x2, oldS.y2, oldS.color, oldS.size);
-                });
+                strokeHistory.forEach(batch => drawStrokeBatch(batch));
                 continue;
             }
 
-            const points = s.points;
-            if (!points || points.length < 1) continue;
-
-            // Draw stroke
-            ctx.beginPath();
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = s.color;
-            ctx.fillStyle = s.color;
-
-            if (points.length === 1) {
-                // Dot
-                const p = points[0];
-                const dpr = window.devicePixelRatio || 1;
-                ctx.arc(p.x * (canvas.width / dpr), p.y * (canvas.height / dpr), s.size / 2, 0, Math.PI * 2);
-                ctx.fill();
-            } else {
-                // Smooth Line
-                ctx.lineWidth = s.size;
-                const dpr = window.devicePixelRatio || 1;
-                const w = canvas.width / dpr;
-                const h = canvas.height / dpr;
-
-                if (points.length > 2) {
-                    // Quadratic Curve Interpolation for smoothness
-                    ctx.moveTo(points[0].x * w, points[0].y * h);
-
-                    for (let i = 1; i < points.length - 2; i++) {
-                        const xc = (points[i].x + points[i + 1].x) / 2;
-                        const yc = (points[i].y + points[i + 1].y) / 2;
-                        ctx.quadraticCurveTo(points[i].x * w, points[i].y * h, xc * w, yc * h);
-                    }
-                    // Curve through the last two points
-                    ctx.quadraticCurveTo(
-                        points[points.length - 2].x * w,
-                        points[points.length - 2].y * h,
-                        points[points.length - 1].x * w,
-                        points[points.length - 1].y * h
-                    );
-                } else {
-                    // Fallback for short lines
-                    ctx.moveTo(points[0].x * w, points[0].y * h);
-                    for (let i = 1; i < points.length; i++) {
-                        ctx.lineTo(points[i].x * w, points[i].y * h);
-                    }
-                }
-                ctx.stroke();
-            }
+            // Normal Stroke
+            drawStrokeBatch(s);
+            strokeHistory.push(s);
         }
     }
     requestAnimationFrame(renderLoop);
@@ -674,7 +688,10 @@ function renderLoop() {
 
 async function syncDraw() {
     // Initial fetch of history when first loading or round changes
-    if (gameState.myTurn && gameState.status === 'drawing' && gameState.lastStrokeId > 0) return;
+    // Initial fetch of history when first loading or round changes
+    // Only skip if we are the drawer AND we already have history (prevents duplication)
+    // If we are the drawer but history is empty (e.g. refresh), we MUST fetch.
+    if (gameState.myTurn && gameState.status === 'drawing' && strokeHistory.length > 0) return;
 
     if (gameState.status !== 'drawing' && gameState.status !== 'ended') return;
 
@@ -711,7 +728,7 @@ function handleIncomingMessage(m) {
         if (m.type === 'guess' || m.is_system) {
             if (m.type === 'guess') {
                 try {
-                    sfx.play('success');
+                    sfx.play('achieve');
                     confetti({ particleCount: 60, spread: 50, origin: { y: 0.8 }, colors: ['#b9f6ca', '#facc15'] });
                 } catch (e) { }
                 div.className = "flex justify-center my-4 px-2 w-full";
@@ -807,6 +824,35 @@ function showToast(m) {
     // Limit to 3 toasts on canvas
     while (toastContainer.children.length > 3) {
         toastContainer.removeChild(toastContainer.firstChild);
+    }
+}
+
+function updateMobileLayout() {
+    if (window.innerWidth >= MOBILE_BREAKPOINT) return;
+    
+    const panel = document.getElementById('mobile-panel');
+    if (!panel) return;
+
+    if (gameState.myTurn || gameState.status === 'drawing') {
+        // Minimize panel to give more drawing space
+        panel.style.setProperty('--mobile-panel-h', '60px');
+        panel.classList.add('minimized');
+    } else {
+        panel.style.setProperty('--mobile-panel-h', '35dvh');
+        panel.classList.remove('minimized');
+    }
+}
+
+function toggleMobilePanel() {
+    const panel = document.getElementById('mobile-panel');
+    if (!panel) return;
+    
+    if (panel.classList.contains('minimized')) {
+        panel.style.setProperty('--mobile-panel-h', '35dvh');
+        panel.classList.remove('minimized');
+    } else {
+        panel.style.setProperty('--mobile-panel-h', '60px');
+        panel.classList.add('minimized');
     }
 }
 
@@ -990,25 +1036,37 @@ function clearCanvasAction() {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'clear' })
+    }).then(r => r.json()).then(res => {
+        if (res.success && res.data && res.data.id) {
+            gameState.lastStrokeId = parseInt(res.data.id);
+            updatePersist();
+        }
     });
 }
 
 function undoAction() {
+    if (!gameState.myTurn) return;
     try { sfx.play('pop'); } catch (e) { }
-    strokeHistory.pop();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const tempHistory = [...strokeHistory];
-    strokeHistory = [];
-    tempHistory.forEach(oldS => {
-        if (oldS.type === 'dot') drawDot(oldS.x, oldS.y, oldS.color, oldS.size);
-        else drawLine(oldS.x1, oldS.y1, oldS.x2, oldS.y2, oldS.color, oldS.size);
-    });
+    
+    if (strokeHistory.length > 0) {
+        let popped;
+        do {
+            popped = strokeHistory.pop();
+        } while (strokeHistory.length > 0 && popped && !popped.is_start);
+    }
 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    strokeHistory.forEach(batch => drawStrokeBatch(batch));
 
     fetch(`${APP_ROOT}api/draw_sync.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: player.token, action: 'undo' })
+    }).then(r => r.json()).then(res => {
+        if (res.success && res.data && res.data.id) {
+            gameState.lastStrokeId = parseInt(res.data.id);
+            updatePersist();
+        }
     });
 }
 
@@ -1046,3 +1104,5 @@ setInterval(() => canPoll('chat') && syncChat(), 1000);
 setInterval(() => canPoll('strokes') && sendStrokes(), 1000);
 if (timerInterval) clearInterval(timerInterval);
 timerInterval = setInterval(() => updateLocalTimer(), 1000);
+
+// End of Game Script

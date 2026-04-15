@@ -276,6 +276,7 @@ if ($tables == 0) {
         size INT DEFAULT 5,
         points MEDIUMTEXT NOT NULL,
         sequence_id INT NOT NULL,
+        is_start TINYINT(1) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
     )");
@@ -305,7 +306,18 @@ if ($tables == 0) {
         setting_value TEXT
     )");
     $pdo->exec("INSERT IGNORE INTO settings (setting_key, setting_value) VALUES 
-    ('lobby_music_enabled', '0'),
-    ('lobby_music_url', ''),
+    ('lobby_music_enabled', '1'),
+    ('lobby_music_url', 'assets/music/lobby_1771165382.mp3'),
     ('music_volume', '0.5')");
+
+    // Feedbacks
+    $pdo->exec("CREATE TABLE IF NOT EXISTS feedbacks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        player_id INT,
+        username VARCHAR(50),
+        message TEXT NOT NULL,
+        rating TINYINT DEFAULT 5,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL
+    )");
 }
