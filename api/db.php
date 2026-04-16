@@ -204,6 +204,7 @@ if ($tables == 0) {
         current_round INT DEFAULT 1,
         max_rounds INT DEFAULT 3,
         round_duration INT DEFAULT 60,
+        max_players INT DEFAULT 8,
         status ENUM('lobby', 'playing', 'finished') DEFAULT 'lobby',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");

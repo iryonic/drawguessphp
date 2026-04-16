@@ -79,13 +79,15 @@ async function confirmCreateRoom() {
     const avatar = document.getElementById('selected-avatar').value;
     const maxRounds = document.getElementById('crs-rounds').value;
     const duration = document.getElementById('crs-time').value;
+    const maxPlayers = document.getElementById('crs-players') ? document.getElementById('crs-players').value : 8;
 
     const res = await apiRequest('rooms.php', {
         action: 'create',
         username,
         avatar,
         max_rounds: maxRounds,
-        round_duration: duration
+        round_duration: duration,
+        max_players: maxPlayers
     });
 
     if (res.success) {
