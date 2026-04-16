@@ -15,7 +15,6 @@ if ($action === 'create') {
     $avatar = $_POST['avatar'] ?? '🐱';
     $max_rounds = intval($_POST['max_rounds'] ?? 3);
     $round_duration = intval($_POST['round_duration'] ?? 60);
-    $max_players = max(2, min(50, intval($_POST['max_players'] ?? 8))); // 2–50
 
     // 2. Generate Unique Room Code
     do {
@@ -25,11 +24,10 @@ if ($action === 'create') {
 
     // 3. Create Room
     $room_id = DB::insert('rooms', [
-        'room_code'      => $room_code,
-        'status'         => 'lobby',
-        'max_rounds'     => $max_rounds,
-        'round_duration' => $round_duration,
-        'max_players'    => $max_players
+        'room_code' => $room_code,
+        'status' => 'lobby',
+        'max_rounds' => $max_rounds,
+        'round_duration' => $round_duration
     ]);
 
     // 4. Create Host Player
@@ -74,16 +72,7 @@ if ($action === 'create') {
         jsonResponse(['error' => 'Game already in progress'], false);
     }
 
-    // 2. Check player cap
-    $room_full = DB::fetch(
-        "SELECT COUNT(*) as cnt, r.max_players FROM players p JOIN rooms r ON r.id = p.room_id WHERE p.room_id = ? GROUP BY r.max_players",
-        [$room['id']]
-    );
-    if ($room_full && $room_full['cnt'] >= $room_full['max_players']) {
-        jsonResponse(['error' => 'Room is full (' . $room_full['max_players'] . ' players max)'], false);
-    }
-
-    // 3. Check Uniqueness
+    // 2. Check Uniqueness
     $conflict = DB::fetch("SELECT id FROM players WHERE room_id = ? AND username = ?", [$room['id'], $username]);
     if ($conflict) {
         jsonResponse(['error' => 'Username taken in this room'], false);

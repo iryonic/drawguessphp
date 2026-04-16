@@ -31,26 +31,6 @@
                 </div>
                 <input type="hidden" id="crs-time" value="60">
             </div>
-
-            <!-- Max Players -->
-            <div class="space-y-4">
-                <label class="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] px-1 text-center">Max Players</label>
-                <div class="grid grid-cols-4 gap-3">
-                    <button onclick="setPlayers(4)"  class="modal-players-opt btn-pop py-3 rounded-2xl bg-white text-ink font-black border-2 border-ink text-sm" data-val="4">4</button>
-                    <button onclick="setPlayers(8)"  class="modal-players-opt btn-pop py-3 rounded-2xl bg-white text-ink font-black border-2 border-ink text-sm" data-val="8">8</button>
-                    <button onclick="setPlayers(16)" class="modal-players-opt btn-pop py-3 rounded-2xl bg-white text-ink font-black border-2 border-ink text-sm" data-val="16">16</button>
-                    <button onclick="setPlayers(32)" class="modal-players-opt btn-pop py-3 rounded-2xl bg-white text-ink font-black border-2 border-ink text-sm" data-val="32">32</button>
-                </div>
-                <!-- Custom Input -->
-                <div class="flex items-center gap-3 mt-1">
-                    <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Custom:</span>
-                    <input type="number" id="crs-players-custom" min="2" max="50" placeholder="e.g. 20"
-                        class="flex-1 border-2 border-ink rounded-xl px-3 py-2 font-black text-sm focus:outline-none focus:shadow-[3px_3px_0_#000] transition-all text-center"
-                        oninput="setPlayersCustom(this.value)">
-                    <span class="text-[10px] font-black text-gray-300 uppercase">max 50</span>
-                </div>
-                <input type="hidden" id="crs-players" value="8">
-            </div>
         </div>
 
         <div class="mt-12">
@@ -66,10 +46,9 @@
     // --- Modal Logic ---
     const modal = document.getElementById('create-modal');
     const modalContent = document.getElementById('create-modal-content');
-    const activeClassRounds  = "bg-pop-purple text-ink border-ink shadow-[4px_4px_0px_#1e1e1e] transform -translate-y-1";
-    const activeClassTime    = "bg-pop-blue text-ink border-ink shadow-[4px_4px_0px_#1e1e1e] transform -translate-y-1";
-    const activeClassPlayers = "bg-pop-pink text-ink border-ink shadow-[4px_4px_0px_#1e1e1e] transform -translate-y-1";
-    const inactiveClass      = "bg-white text-gray-400 border-gray-200 shadow-none";
+    const activeClassRounds = "bg-pop-purple text-ink border-ink shadow-[4px_4px_0px_#1e1e1e] transform -translate-y-1";
+    const activeClassTime = "bg-pop-blue text-ink border-ink shadow-[4px_4px_0px_#1e1e1e] transform -translate-y-1";
+    const inactiveClass = "bg-white text-gray-400 border-gray-200 shadow-none";
 
     function openCreateModal() {
         const username = document.getElementById('username').value.trim();
@@ -106,30 +85,11 @@
         try { sfx.play('pop'); } catch(e){}
     }
 
-    function setPlayers(v) {
-        document.getElementById('crs-players').value = v;
-        document.getElementById('crs-players-custom').value = '';
-        updateOptionStyles();
-        try { sfx.play('pop'); } catch(e){}
-    }
-
-    function setPlayersCustom(v) {
-        const val = Math.max(2, Math.min(50, parseInt(v) || 8));
-        document.getElementById('crs-players').value = val;
-        // Deselect preset buttons
-        document.querySelectorAll('.modal-players-opt').forEach(btn => btn.className = `modal-players-opt btn-pop py-3 rounded-2xl font-black border-2 text-sm ${inactiveClass}`);
-    }
-
     function updateOptionStyles() {
-        const rounds   = document.getElementById('crs-rounds').value;
-        const time     = document.getElementById('crs-time').value;
-        const players  = document.getElementById('crs-players').value;
-        document.querySelectorAll('.modal-opt').forEach(btn =>
-            btn.className = `modal-opt btn-pop py-3 rounded-2xl font-black border-2 text-sm ${btn.dataset.val == rounds ? activeClassRounds : inactiveClass}`);
-        document.querySelectorAll('.modal-time-opt').forEach(btn =>
-            btn.className = `modal-time-opt btn-pop py-3 rounded-2xl font-black border-2 text-xs ${btn.dataset.val == time ? activeClassTime : inactiveClass}`);
-        document.querySelectorAll('.modal-players-opt').forEach(btn =>
-            btn.className = `modal-players-opt btn-pop py-3 rounded-2xl font-black border-2 text-sm ${btn.dataset.val == players ? activeClassPlayers : inactiveClass}`);
+        const rounds = document.getElementById('crs-rounds').value;
+        const time = document.getElementById('crs-time').value;
+        document.querySelectorAll('.modal-opt').forEach(btn => btn.className = `modal-opt btn-pop py-3 rounded-2xl font-black border-2 text-sm ${btn.dataset.val == rounds ? activeClassRounds : inactiveClass}`);
+        document.querySelectorAll('.modal-time-opt').forEach(btn => btn.className = `modal-time-opt btn-pop py-3 rounded-2xl font-black border-2 text-xs ${btn.dataset.val == time ? activeClassTime : inactiveClass}`);
     }
     
     updateOptionStyles();

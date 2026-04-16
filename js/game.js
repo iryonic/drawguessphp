@@ -1,6 +1,6 @@
 // --- Layout Constants & Global State ---
 const MOBILE_BREAKPOINT = 1024;
-const DEFAULT_MOBILE_PANEL_H = '85vh';
+const DEFAULT_MOBILE_PANEL_H = '45vh';
 window.currentTab = (window.innerWidth < MOBILE_BREAKPOINT) ? 'chat' : 'draw';
 let currentTab = window.currentTab;
 
@@ -560,7 +560,6 @@ async function syncState() {
             if (window.innerWidth < 1024) switchTab('rank');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
-        updateMobileLayout();
     } catch (e) {
         console.error("SyncState Error:", e);
     }
@@ -827,34 +826,7 @@ function showToast(m) {
     }
 }
 
-function updateMobileLayout() {
-    if (window.innerWidth >= MOBILE_BREAKPOINT) return;
-    
-    const panel = document.getElementById('mobile-panel');
-    if (!panel) return;
 
-    if (gameState.myTurn || gameState.status === 'drawing') {
-        // Minimize panel to give more drawing space
-        panel.style.setProperty('--mobile-panel-h', '60px');
-        panel.classList.add('minimized');
-    } else {
-        panel.style.setProperty('--mobile-panel-h', '35dvh');
-        panel.classList.remove('minimized');
-    }
-}
-
-function toggleMobilePanel() {
-    const panel = document.getElementById('mobile-panel');
-    if (!panel) return;
-    
-    if (panel.classList.contains('minimized')) {
-        panel.style.setProperty('--mobile-panel-h', '35dvh');
-        panel.classList.remove('minimized');
-    } else {
-        panel.style.setProperty('--mobile-panel-h', '60px');
-        panel.classList.add('minimized');
-    }
-}
 
 function switchTab(tab) {
     if (window.innerWidth >= MOBILE_BREAKPOINT) return;

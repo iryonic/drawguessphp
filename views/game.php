@@ -183,7 +183,7 @@
             </div>
 
             <!-- Canvas Container (50/50 Split for Mobile) -->
-            <div id="canvas-container" class="flex-1 lg:flex-none relative p-2 md:p-8 flex items-center justify-center bg-paper min-h-[45dvh] lg:min-h-0">
+            <div id="canvas-container" class="flex-1 lg:flex-none relative p-[0.2rem] md:p-8 flex items-center justify-center bg-paper min-h-[45dvh] lg:min-h-0">
                 <div class="canvas-wrapper relative w-full h-full max-w-6xl aspect-[16/9] md:aspect-[4/3] md:neo-border bg-white overflow-hidden isolate shadow-lg md:shadow-none">
                     <canvas id="game-canvas" class="w-full h-full cursor-crosshair touch-none select-none"></canvas>
                     
@@ -231,10 +231,8 @@
 
         <!-- Mobile Bottom Section (Persistent Split) -->
         <div id="mobile-panel" class="lg:hidden bg-white border-t-[3px] border-ink flex flex-col transition-all duration-300 h-[var(--mobile-panel-h)] overflow-hidden relative z-20">
-            <!-- Pull Handle -->
-            <div onclick="toggleMobilePanel()" class="h-6 flex items-center justify-center border-b border-ink/10 cursor-pointer hover:bg-gray-50 shrink-0">
-                <div class="w-10 h-1 bg-ink/20 rounded-full"></div>
-            </div>
+         
+            
             <div id="view-rank" class="flex flex-1 p-4 overflow-hidden flex-col">
                  <h2 class="font-black text-lg mb-3 border-b-2 border-ink pb-1 uppercase tracking-wide">🏆 Leaderboard</h2>
                  <div id="player-list-mobile" class="space-y-3 overflow-y-auto flex-1 no-scrollbar pb-2"></div>
