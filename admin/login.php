@@ -59,7 +59,12 @@ if (isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true) {
             </div>
             <div>
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Secret</label>
-                <input type="password" name="password" placeholder="••••••••" class="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-ink focus:outline-none focus:shadow-[4px_4px_0px_#000] transition-all bg-gray-50/50" required>
+                <div class="relative">
+                    <input type="password" name="password" id="login_password" placeholder="••••••••" class="w-full border-2 border-gray-100 rounded-2xl p-4 pr-12 text-sm font-bold focus:border-ink focus:outline-none focus:shadow-[4px_4px_0px_#000] transition-all bg-gray-50/50" required>
+                    <button type="button" onclick="togglePwd()" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-ink transition-colors text-lg">
+                        <span id="pwd-eye">👁️</span>
+                    </button>
+                </div>
             </div>
             
             <button type="submit" class="w-full bg-ink text-white font-black py-4 rounded-2xl border-2 border-ink hover:bg-gray-800 active:translate-y-1 active:shadow-none transition-all shadow-[6px_6px_0px_#ccc]">
@@ -74,4 +79,17 @@ if (isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true) {
         </div>
     </div>
 </body>
+<script>
+    function togglePwd() {
+        const input = document.getElementById('login_password');
+        const eye = document.getElementById('pwd-eye');
+        if (input.type === 'password') {
+            input.type = 'text';
+            eye.innerText = '🙈';
+        } else {
+            input.type = 'password';
+            eye.innerText = '👁️';
+        }
+    }
+</script>
 </html>

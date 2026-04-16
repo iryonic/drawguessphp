@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             // Update Username
             DB::query("UPDATE admins SET username = ? WHERE id = ?", [$new_username, $admin_id]);
-            $_SESSION['admin_user'] = $new_username;
+            $_SESSION['admin_username'] = $new_username;
             
             // Update Password if provided
             if (!empty($new_password)) {
@@ -35,6 +35,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } else {
                 $success = "Username updated successfully.";
+            }
+
+            if (!$error) {
+                // Regenerate session ID and clear the old CSRF token.
+                // This prevents "security mismatch" on other admin pages
+                // (like music.php) after a password change.
+                session_regenerate_id(true);
+                unset($_SESSION['csrf_token']);
             }
 
             // Refresh local admin data
@@ -96,14 +104,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="space-y-4">
                         <div>
                             <label class="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">New Password</label>
-                            <input type="password" name="password" 
-                                class="w-full bg-gray-50 border-[3px] border-ink rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-4 focus:ring-pop-purple/20 transition-all">
+                            <div class="relative">
+                                <input type="password" name="password" id="new_password"
+                                    class="w-full bg-gray-50 border-[3px] border-ink rounded-xl px-4 py-3 pr-12 font-bold focus:outline-none focus:ring-4 focus:ring-pop-purple/20 transition-all">
+                                <button type="button" onclick="togglePwd('new_password', 'eye1')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-ink transition-colors">
+                                    <span id="eye1">👁️</span>
+                                </button>
+                            </div>
                         </div>
 
                         <div>
                             <label class="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Confirm Password</label>
-                            <input type="password" name="confirm_password" 
-                                class="w-full bg-gray-50 border-[3px] border-ink rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-4 focus:ring-pop-purple/20 transition-all">
+                            <div class="relative">
+                                <input type="password" name="confirm_password" id="confirm_password"
+                                    class="w-full bg-gray-50 border-[3px] border-ink rounded-xl px-4 py-3 pr-12 font-bold focus:outline-none focus:ring-4 focus:ring-pop-purple/20 transition-all">
+                                <button type="button" onclick="togglePwd('confirm_password', 'eye2')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-ink transition-colors">
+                                    <span id="eye2">👁️</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -120,6 +138,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script>
+        function togglePwd(inputId, eyeId) {
+            const input = document.getElementById(inputId);
+            const eye = document.getElementById(eyeId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.innerText = '🙈';
+            } else {
+                input.type = 'password';
+                eye.innerText = '👁️';
+            }
+        }
         tailwind.config = {
             theme: {
                 extend: {

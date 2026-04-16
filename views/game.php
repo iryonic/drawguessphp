@@ -7,11 +7,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-      <link rel="shortcut icon" href="<?= $base_path ?>assets/pwa/favicon.png" type="image/png">
+    <link rel="shortcut icon" href="<?= $base_path ?>assets/pwa/favicon.png" type="image/png">
     <title>Draw & Guess - Play Time!</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖊️</text></svg>">
     <link rel="manifest" href="<?= $base_path ?>manifest.json">
     <meta name="theme-color" content="#ffeb3b">
     <script>
