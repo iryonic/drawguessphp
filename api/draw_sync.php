@@ -95,4 +95,24 @@ if ($action === 'fetch') {
     jsonResponse(['strokes' => $strokes]);
 }
 
+// 7. FILL ACTION
+if ($action === 'fill') {
+    if ($player['id'] != $round['drawer_id']) {
+        jsonResponse(['error' => 'Not your turn'], false);
+    }
+    $color = $_POST['color'] ?? '#000000';
+    $x = floatval($_POST['x'] ?? 0);
+    $y = floatval($_POST['y'] ?? 0);
+    // Store fill as special stroke; points contains the normalized click coord
+    $points = json_encode([['x' => $x, 'y' => $y]]);
+    $sid = DB::insert('strokes', [
+        'round_id'    => $round['id'],
+        'color'       => 'FILL:' . $color,
+        'size'        => 0,
+        'points'      => $points,
+        'sequence_id' => 0
+    ]);
+    jsonResponse(['success' => true, 'id' => $sid]);
+}
+
 jsonResponse(['error' => 'Invalid action'], false);

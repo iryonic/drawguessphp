@@ -96,7 +96,8 @@ let gameState = {
     size: (window.innerWidth < 1024) ? 3 : 5,
     myTurn: false,
     endTime: 0,
-    totalTime: 60
+    totalTime: 60,
+    tool: 'pen'   // 'pen' | 'fill'
 };
 
 // Game Persist Logic
@@ -228,6 +229,14 @@ function getNormalizedPos(evt) {
 
 function startDraw(e) {
     if (!gameState.myTurn) return;
+
+    // Fill tool: run bucket fill on click, don't start a paint stroke
+    if (gameState.tool === 'fill') {
+        const pos = getNormalizedPos(e);
+        fillAction(pos.x, pos.y);
+        return;
+    }
+
     painting = true;
     lastPos = getNormalizedPos(e);
     pointsBuffer = [lastPos];
@@ -677,6 +686,17 @@ function renderLoop() {
                 continue;
             }
 
+            if (typeof s.color === 'string' && s.color.startsWith('FILL:')) {
+                const fillColor = s.color.slice(5);
+                const pt = Array.isArray(s.points) && s.points[0] ? s.points[0] : null;
+                if (pt) {
+                    floodFillCanvas(pt.x, pt.y, fillColor);
+                    // Store fill as a special history entry for undo to clear over
+                    strokeHistory.push(s);
+                }
+                continue;
+            }
+
             // Normal Stroke
             drawStrokeBatch(s);
             strokeHistory.push(s);
@@ -989,6 +1009,111 @@ function setSize(s) {
     updateBrushPreview();
 }
 
+function setTool(tool) {
+    gameState.tool = tool;
+    // Update cursor
+    if (canvas) {
+        canvas.style.cursor = tool === 'fill' ? 'cell' : 'crosshair';
+    }
+    // Update active state on toolbar buttons
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.classList.toggle('ring-2', btn.dataset.tool === tool);
+        btn.classList.toggle('ring-ink', btn.dataset.tool === tool);
+        btn.classList.toggle('bg-pop-yellow', btn.dataset.tool === tool);
+    });
+    try { sfx.play('pop'); } catch(e) {}
+}
+
+// ---------- Flood Fill (Iterative Scanline) ----------
+function hexToRgba(hex) {
+    const h = hex.replace('#', '');
+    const bigint = parseInt(h.length === 3
+        ? h.split('').map(c => c + c).join('')
+        : h, 16);
+    return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255, 255];
+}
+
+function colorsMatch(data, idx, target, tolerance) {
+    return Math.abs(data[idx]     - target[0]) <= tolerance &&
+           Math.abs(data[idx + 1] - target[1]) <= tolerance &&
+           Math.abs(data[idx + 2] - target[2]) <= tolerance &&
+           Math.abs(data[idx + 3] - target[3]) <= tolerance;
+}
+
+function floodFillCanvas(startNX, startNY, fillColor) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.floor(canvas.width);
+    const h = Math.floor(canvas.height);
+
+    const sx = Math.round(startNX * (canvas.width / dpr) * dpr);
+    const sy = Math.round(startNY * (canvas.height / dpr) * dpr);
+
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const data = imageData.data;
+
+    const targetColor = [
+        data[(sy * w + sx) * 4],
+        data[(sy * w + sx) * 4 + 1],
+        data[(sy * w + sx) * 4 + 2],
+        data[(sy * w + sx) * 4 + 3]
+    ];
+    const fill = hexToRgba(fillColor);
+
+    // Don't fill if already the same color
+    if (fill[0] === targetColor[0] && fill[1] === targetColor[1] &&
+        fill[2] === targetColor[2] && fill[3] === targetColor[3]) return;
+
+    const TOLERANCE = 20;
+    const visited = new Uint8Array(w * h);
+    const stack = [[sx, sy]];
+
+    while (stack.length > 0) {
+        const [cx, cy] = stack.pop();
+        if (cx < 0 || cx >= w || cy < 0 || cy >= h) continue;
+        const idx = cy * w + cx;
+        if (visited[idx]) continue;
+        visited[idx] = 1;
+
+        if (!colorsMatch(data, idx * 4, targetColor, TOLERANCE)) continue;
+
+        data[idx * 4]     = fill[0];
+        data[idx * 4 + 1] = fill[1];
+        data[idx * 4 + 2] = fill[2];
+        data[idx * 4 + 3] = fill[3];
+
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+}
+
+function fillAction(nx, ny) {
+    if (!gameState.myTurn) return;
+    try { sfx.play('pop'); } catch(e) {}
+
+    // Apply locally
+    floodFillCanvas(nx, ny, gameState.color);
+
+    // Sync to server
+    fetch(`${APP_ROOT}api/draw_sync.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            token: player.token,
+            action: 'fill',
+            color: gameState.color,
+            x: nx,
+            y: ny
+        })
+    }).then(r => r.json()).then(res => {
+        if (res.success && res.data && res.data.id) {
+            gameState.lastStrokeId = parseInt(res.data.id);
+            updatePersist();
+        }
+    });
+}
+// ---------- End Flood Fill ----------
+
 function updateBrushPreview() {
     const preview = document.getElementById('brush-preview');
     if (preview) {
@@ -1062,6 +1187,8 @@ window.syncState = syncState;
 window.sendReaction = sendReaction;
 window.setColor = setColor;
 window.setSize = setSize;
+window.setTool = setTool;
+window.fillAction = fillAction;
 window.undoAction = undoAction;
 window.clearCanvasAction = clearCanvasAction;
 window.toggleMusicUI = toggleMusicUI;

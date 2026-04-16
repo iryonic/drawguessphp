@@ -176,6 +176,9 @@
 
                     <!-- Actions -->
                     <div class="flex gap-1 shrink-0">
+                        <button onclick="setTool('pen')" data-tool="pen" class="tool-btn p-1 rounded-lg hover:bg-gray-100 text-base md:text-xl ring-2 ring-ink bg-pop-yellow" title="Pen">✏️</button>
+                        <button onclick="setTool('fill')" data-tool="fill" class="tool-btn p-1 rounded-lg hover:bg-yellow-50 text-base md:text-xl" title="Fill Bucket">🪣</button>
+                        <div class="w-px h-5 bg-ink/10 self-center mx-0.5"></div>
                         <button onclick="undoAction()" class="p-1 rounded-lg hover:bg-gray-100 text-base md:text-xl" title="Undo">↩️</button>
                         <button onclick="clearCanvasAction()" class="p-1 rounded-lg hover:bg-red-50 text-base md:text-xl" title="Clear">🗑️</button>
                     </div>
