@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+      <link rel="shortcut icon" href="<?= $base_path ?>assets/pwa/favicon.png" type="image/png">
     <title>How to Play — Draw & Guess Royale</title>
     <meta name="description" content="Learn how to play Draw & Guess Royale. Master the drawing tools, scoring system, round mechanics, and pro tips to dominate every game.">
     <script src="https://cdn.tailwindcss.com"></script>

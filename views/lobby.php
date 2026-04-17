@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Draw & Guess - Creative Drawing </title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="shortcut icon" href="<?= $base_path ?>assets/pwa/favicon.png" type="image/png">
 
     <meta name="description" content="Draw & Guess Royale — the free real-time multiplayer drawing and guessing game. Create a room, invite friends and see who can draw and guess the fastest!">
     <meta name="keywords" content="draw and guess, multiplayer drawing game, online skribbl, free guessing game, drawguess royale, real-time drawing">

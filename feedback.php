@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Feedback - Draw & Guess</title>
     <script src="https://cdn.tailwindcss.com"></script>
+      <link rel="shortcut icon" href="<?= $base_path ?>assets/pwa/favicon.png" type="image/png">
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Fredoka', sans-serif; background-color: #fdfbf7; background-image: radial-gradient(#f1f3f5 1.2px, transparent 1.2px), radial-gradient(#f1f3f5 1.2px, transparent 1.2px); background-size: 24px 24px; background-position: 0 0, 12px 12px; }
