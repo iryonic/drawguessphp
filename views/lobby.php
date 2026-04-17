@@ -99,8 +99,8 @@
                 <!-- Avatar Selector -->
                 <div>
                     <div class="flex justify-between items-center px-1 mb-2 sm:mb-3">
-                        <label class="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Select Persona</label>
-                        <span class="text-[9px] sm:text-[10px] text-gray-300 italic">Swipe →</span>
+                        <label class="text-[10px] sm:text-xs font-black text-gray-600 uppercase tracking-[0.2em]">Select Avatar</label>
+                        <span class="text-[9px] sm:text-[10px] text-gray-300 italic bold">Swipe →</span>
                     </div>
                     <div class="flex gap-3 sm:gap-4 overflow-x-auto pb-4 px-1 no-scrollbar" id="avatar-list"></div>
                     <input type="hidden" id="selected-avatar" value="🐱">

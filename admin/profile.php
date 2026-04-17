@@ -9,14 +9,23 @@ $error = "";
 // Fetch current admin
 $admin = DB::fetch("SELECT * FROM admins WHERE id = ?", [$admin_id]);
 
+$token = getCSRFToken();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $new_username = trim($_POST['username'] ?? '');
-    $new_password = $_POST['password'] ?? '';
-    $confirm_password = $_POST['confirm_password'] ?? '';
-    
-    if (empty($new_username)) {
-        $error = "Username cannot be empty.";
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        $error = "Security mismatch. Please try again.";
     } else {
+        $current_password = $_POST['current_password'] ?? '';
+        $new_username = trim($_POST['username'] ?? '');
+        $new_password = $_POST['password'] ?? '';
+        $confirm_password = $_POST['confirm_password'] ?? '';
+        
+        if (!password_verify($current_password, $admin['password_hash'] ?? '')) {
+            $error = "Current password verification failed.";
+        } elseif (empty($new_username)) {
+            $error = "Username cannot be empty.";
+        } else {
+
         try {
             // Update Username
             DB::query("UPDATE admins SET username = ? WHERE id = ?", [$new_username, $admin_id]);
@@ -51,9 +60,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             $error = "Error updating profile: " . $e->getMessage();
         }
+        }
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -92,7 +103,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
 
             <form method="POST" class="space-y-6">
+                <input type="hidden" name="csrf_token" value="<?= $token ?>">
+
                 <div>
+                    <label class="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Current Password <span class="text-pop-red">*</span></label>
+                    <div class="relative">
+                        <input type="password" name="current_password" id="current_password" required
+                            class="w-full bg-gray-100 border-[3px] border-ink rounded-xl px-4 py-3 pr-12 font-bold focus:outline-none focus:ring-4 focus:ring-pop-purple/20 transition-all"
+                            placeholder="Required to save changes">
+                        <button type="button" onclick="togglePwd('current_password', 'eye0')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-ink transition-colors">
+                            <span id="eye0">👁️</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t-2 border-ink/5">
                     <label class="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Username</label>
                     <input type="text" name="username" value="<?= htmlspecialchars($admin['username'] ?? '') ?>" 
                         class="w-full bg-gray-50 border-[3px] border-ink rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-4 focus:ring-pop-purple/20 transition-all">

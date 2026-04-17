@@ -168,6 +168,14 @@ class DB {
         global $pdo;
         return $pdo->lastInsertId();
     }
+    public static function delete($table, $where, $params = []) {
+        $sql = "DELETE FROM `$table` WHERE $where";
+        return self::query($sql, $params);
+    }
+    public static function count($table, $where = "1", $params = []) {
+        $sql = "SELECT COUNT(*) as c FROM `$table` WHERE $where";
+        return (int)self::fetch($sql, $params)['c'];
+    }
 }
 
 /**
@@ -321,3 +329,13 @@ if ($tables == 0) {
         FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL
     )");
 }
+
+// 6. Incremental Updates (Run always to ensure new tables exist)
+$pdo->exec("CREATE TABLE IF NOT EXISTS login_attempts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(45) NOT NULL,
+    attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX(ip_address),
+    INDEX(attempt_time)
+)");
+

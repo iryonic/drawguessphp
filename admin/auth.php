@@ -32,6 +32,23 @@ function verifyCSRFToken($token) {
 }
 
 /**
+ * Brute Force Protection Helpers
+ */
+function isIPBlocked($ip) {
+    // Check for 5 failures in the last 10 minutes
+    $failures = DB::count("login_attempts", "ip_address = ? AND attempt_time > DATE_SUB(NOW(), INTERVAL 10 MINUTE)", [$ip]);
+    return $failures >= 5;
+}
+
+function recordLoginAttempt($ip) {
+    DB::insert("login_attempts", ["ip_address" => $ip]);
+}
+
+function clearLoginAttempts($ip) {
+    DB::delete("login_attempts", "ip_address = ?", [$ip]);
+}
+
+/**
  * Ensures user is authenticated as an admin.
  */
 function checkAdmin() {
@@ -47,23 +64,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_action'])) {
     if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
         $error = "Security mismatch. Please try again.";
     } else {
-        $user = trim($_POST['username'] ?? '');
-        $pass = $_POST['password'] ?? '';
-
-        // Verify against DB using PDO Prepared Statement
-        $admin = DB::fetch("SELECT * FROM admins WHERE username = ? LIMIT 1", [$user]);
-        
-        if ($admin && password_verify($pass, $admin['password_hash'])) {
-            session_regenerate_id(true);
-            $_SESSION['is_admin'] = true;
-            $_SESSION['admin_username'] = $admin['username'];
-            $_SESSION['admin_id'] = $admin['id'];
-            
-            $target = defined('APP_ROOT') ? APP_ROOT . 'admin' : 'index.php';
-            header("Location: " . $target);
-            exit;
+        $ip = $_SERVER['REMOTE_ADDR'];
+        if (isIPBlocked($ip)) {
+            $error = "Too many failed attempts. Account locked for 15 minutes.";
         } else {
-            $error = "Access Denied: Invalid Username or Password";
+            $user = trim($_POST['username'] ?? '');
+            $pass = $_POST['password'] ?? '';
+
+            // Verify against DB using PDO Prepared Statement
+            $admin = DB::fetch("SELECT * FROM admins WHERE username = ? LIMIT 1", [$user]);
+            
+            if ($admin && password_verify($pass, $admin['password_hash'])) {
+                clearLoginAttempts($ip);
+                session_regenerate_id(true);
+                $_SESSION['is_admin'] = true;
+                $_SESSION['admin_username'] = $admin['username'];
+                $_SESSION['admin_id'] = $admin['id'];
+                
+                $target = defined('APP_ROOT') ? APP_ROOT . 'admin' : 'index.php';
+                header("Location: " . $target);
+                exit;
+            } else {
+                recordLoginAttempt($ip);
+                $error = "Access Denied: Invalid Username or Password";
+            }
         }
     }
 }
