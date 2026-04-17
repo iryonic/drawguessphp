@@ -536,7 +536,9 @@ async function syncState() {
                     }
                 }
             } else {
-                if (ui.overlayTitle) ui.overlayTitle.textContent = "DRAWER IS CHOOSING";
+                const drawer = data.players.find(p => p.id == data.round.drawer_id);
+                const drawerName = drawer ? drawer.username.toUpperCase() : "DRAWER";
+                if (ui.overlayTitle) ui.overlayTitle.textContent = `${drawerName} IS CHOOSING`;
                 if (ui.wordSelect) ui.wordSelect.classList.add('hidden');
             }
         } else if (gameState.status === 'countdown') {
