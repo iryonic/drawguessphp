@@ -95,7 +95,10 @@
         <!-- Word/Status (Floating HUD) -->
         <div id="floating-word-hud" class="absolute left-1/2 -translate-x-1/2 top-full -mt-2 md:mt-0 md:top-1/2 md:-translate-y-1/2 flex flex-col items-center pointer-events-none z-[60]">
              <div class="bg-white border-[2.5px] border-ink rounded-xl md:rounded-2xl px-4 md:px-8 py-1.5 md:py-2.5 shadow-[4px_4px_0px_#000] pointer-events-auto min-w-[120px] md:min-w-[200px] text-center transition-all duration-300 transform hover:scale-105">
-                <div id="word-display" class="font-mono font-black text-xs md:text-2xl truncate leading-none uppercase tracking-[0.2em] text-ink">WAITING</div>
+                <div class="flex items-center justify-center gap-2 sm:gap-3 overflow-hidden">
+                    <div id="word-display" class="font-mono font-black text-sm sm:text-lg md:text-2xl leading-none uppercase tracking-[0.2em] md:tracking-[0.3em] text-ink whitespace-nowrap overflow-hidden">WAITING</div>
+                    <div id="word-len" class="bg-ink text-white text-[10px] sm:text-xs font-black px-1.5 py-0.5 rounded-md hidden"></div>
+                </div>
              </div>
         </div>
 
@@ -216,6 +219,46 @@
                     </div>
 
                     <div id="canvas-toasts" class="absolute top-4 left-4 right-4 z-40 pointer-events-none flex flex-col items-start gap-2"></div>
+
+                    <!-- Game Over / Results Screen -->
+                    <div id="results-screen" class="absolute inset-0 z-[110] hidden bg-pop-blue flex flex-col items-center justify-center p-4 text-center overflow-hidden">
+                        <div class="relative w-full max-w-2xl">
+                            <h2 class="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter mb-8 drop-shadow-[6px_6px_0px_#000]">GAME OVER!</h2>
+                            
+                            <!-- Podium Container -->
+                            <div id="podium" class="flex items-end justify-center gap-2 md:gap-4 mb-12 min-h-[300px]">
+                                <!-- 2nd Place -->
+                                <div class="flex flex-col items-center group">
+                                    <div id="winner-2-avatar" class="text-4xl md:text-6xl mb-2 animate-bounce transition-all duration-500 delay-100">🥈</div>
+                                    <div class="bg-white border-[4px] border-ink p-2 md:p-4 rounded-t-2xl w-24 md:w-36 h-32 md:h-48 flex flex-col items-center justify-end shadow-[6px_6px_0px_#000]">
+                                        <div id="winner-2-name" class="font-black text-[10px] md:text-sm uppercase truncate w-full mb-1">---</div>
+                                        <div id="winner-2-score" class="font-black text-sm md:text-xl text-pop-pink">0</div>
+                                        <div class="mt-2 font-black text-2xl md:text-4xl text-gray-200">2</div>
+                                    </div>
+                                </div>
+                                <!-- 1st Place -->
+                                <div class="flex flex-col items-center group z-10 -translate-y-4">
+                                    <div id="winner-1-avatar" class="text-6xl md:text-8xl mb-2 animate-bounce transition-all duration-500">🥇</div>
+                                    <div class="bg-pop-yellow border-[4px] border-ink p-2 md:p-4 rounded-t-2xl w-28 md:w-44 h-44 md:h-64 flex flex-col items-center justify-end shadow-[8px_8px_0px_#000]">
+                                        <div id="winner-1-name" class="font-black text-xs md:text-lg uppercase truncate w-full mb-1 text-center">---</div>
+                                        <div id="winner-1-score" class="font-black text-lg md:text-2xl text-pop-pink">0</div>
+                                        <div class="mt-2 font-black text-4xl md:text-6xl text-white/50">1</div>
+                                    </div>
+                                </div>
+                                <!-- 3rd Place -->
+                                <div class="flex flex-col items-center group">
+                                    <div id="winner-3-avatar" class="text-3xl md:text-5xl mb-2 animate-bounce transition-all duration-500 delay-200">🥉</div>
+                                    <div class="bg-white border-[4px] border-ink p-2 md:p-4 rounded-t-2xl w-20 md:w-32 h-24 md:h-36 flex flex-col items-center justify-end shadow-[4px_4px_0px_#000]">
+                                        <div id="winner-3-name" class="font-black text-[10px] md:text-xs uppercase truncate w-full mb-1">---</div>
+                                        <div id="winner-3-score" class="font-black text-xs md:text-lg text-pop-pink">0</div>
+                                        <div class="mt-2 font-black text-xl md:text-3xl text-gray-100">3</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onclick="window.location.href='index.php'" class="neo-btn bg-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-lg hover:bg-pop-yellow transition-all active:translate-y-1">Return to Lobby 🏠</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -294,6 +337,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <script src="<?= $base_path ?>js/sounds.js?v=NUCLEAR_RESET"></script>
     <script src="<?= $base_path ?>js/game.js?v=NUCLEAR_RESET"></script>
 </body>

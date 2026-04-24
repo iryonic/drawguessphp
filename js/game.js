@@ -53,10 +53,13 @@ const ui = {
     get wordSelect() { return getEl('word-selection'); },
     get startBtn() { return getEl('start-btn'); },
     get wordDisplay() { return getEl('word-display'); },
+    get wordLen() { return getEl('word-len'); },
     get timer() { return getEl('timer'); },
     get timerProgress() { return getEl('timer-progress'); },
     get turnNotif() { return getEl('turn-notification'); },
     get floatingHud() { return getEl('floating-word-hud'); },
+    get resultsScreen() { return getEl('results-screen'); },
+    get podium() { return getEl('podium'); },
     get reactionBar() { return getEl('reaction-bar'); },
     get chatBox() { return getEl('chat-box') || getEl('chat-box-mobile'); },
     get chatInput() { return getEl('chat-input') || getEl('chat-input-mobile'); }
@@ -546,12 +549,28 @@ async function syncState() {
             if (ui.overlayTitle) ui.overlayTitle.textContent = "GET READY!";
             if (ui.wordSelect) ui.wordSelect.classList.add('hidden');
             if (ui.startBtn) ui.startBtn.classList.add('hidden');
-            if (ui.wordDisplay) ui.wordDisplay.textContent = ''; 
+            if (ui.wordDisplay) ui.wordDisplay.textContent = data.round.word || ""; 
+            if (ui.wordLen) {
+                if (data.round.word_len > 0) {
+                    ui.wordLen.textContent = data.round.word_len;
+                    ui.wordLen.classList.remove('hidden');
+                } else {
+                    ui.wordLen.classList.add('hidden');
+                }
+            }
             ctx.clearRect(0, 0, canvas.width, canvas.height); 
 
         } else if (gameState.status === 'drawing') {
             if (ui.overlay) ui.overlay.classList.add('hidden');
             if (ui.wordDisplay) ui.wordDisplay.textContent = data.round.word || "";
+            if (ui.wordLen) {
+                if (data.round.word_len > 0) {
+                    ui.wordLen.textContent = data.round.word_len;
+                    ui.wordLen.classList.remove('hidden');
+                } else {
+                    ui.wordLen.classList.add('hidden');
+                }
+            }
 
             if (data.round.id != gameState.roundId) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -564,16 +583,66 @@ async function syncState() {
             if (ui.overlayTitle) ui.overlayTitle.textContent = `ROUND OVER!`;
             if (ui.wordSelect) ui.wordSelect.classList.add('hidden');
             if (ui.startBtn) ui.startBtn.classList.add('hidden');
+            if (ui.wordLen) ui.wordLen.classList.add('hidden');
 
         } else if (gameState.status === 'finished' || gameState.status === 'game_over') {
-            if (ui.overlay) ui.overlay.classList.remove('hidden');
-            if (ui.overlayTitle) ui.overlayTitle.textContent = `GAME OVER!`;
-            if (window.innerWidth < 1024) switchTab('rank');
+            if (ui.wordLen) ui.wordLen.classList.add('hidden');
+            if (ui.wordDisplay) ui.wordDisplay.textContent = "GAME OVER";
+            showResults(data.players);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
     } catch (e) {
         console.error("SyncState Error:", e);
     }
+}
+
+function showResults(players) {
+    if (!ui.resultsScreen || !ui.resultsScreen.classList.contains('hidden')) return;
+
+    // Sort players by score
+    const sorted = [...players].sort((a, b) => b.score - a.score);
+    
+    // Update Podium
+    for (let i = 1; i <= 3; i++) {
+        const p = sorted[i - 1];
+        const nameEl = document.getElementById(`winner-${i}-name`);
+        const scoreEl = document.getElementById(`winner-${i}-score`);
+        const avatarEl = document.getElementById(`winner-${i}-avatar`);
+
+        if (p && nameEl && scoreEl) {
+            nameEl.textContent = p.username;
+            scoreEl.textContent = p.score;
+            if (avatarEl && p.avatar) avatarEl.textContent = p.avatar;
+        } else if (nameEl) {
+            nameEl.textContent = "---";
+            if (scoreEl) scoreEl.textContent = "0";
+        }
+    }
+
+    ui.resultsScreen.classList.remove('hidden');
+    
+    // Trigger Confetti
+    const duration = 5 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 1000 };
+
+    function randomInRange(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    const interval = setInterval(function() {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+            return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+    }, 250);
+
+    try { sfx.play('start'); } catch(e) {}
 }
 
 function toggleMusicUI() {

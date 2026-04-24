@@ -1,37 +1,42 @@
 <?php
-require_once 'db.php';
-
 /**
- * PRODUCTION CLEANUP SCRIPT
+ * PRODUCTION CLEANUP SCRIPT (Fixed)
+ * Refactored to use PDO/DB class.
  * Run this via Cron Job (e.g., every hour)
  * 0 * * * * php /path/to/api/cleanup.php
  */
+require_once 'db.php';
 
 if (php_sapi_name() !== 'cli' && !isset($_GET['force'])) {
-    die("This script must be run from the command line.");
+    die("This script must be run from the command line or with ?force=1\n");
 }
 
 echo "Starting cleanup...\n";
 
-// 1. Delete players inactive for more than 1 hour
-$res = db_prepare($conn, "DELETE FROM players WHERE last_active < DATE_SUB(NOW(), INTERVAL 1 HOUR)");
-echo "Deleted inactive players.\n";
+try {
+    // 1. Delete players inactive for more than 1 hour
+    $deletedPlayers = DB::query("DELETE FROM players WHERE last_active < DATE_SUB(NOW(), INTERVAL 1 HOUR)")->rowCount();
+    echo "Deleted $deletedPlayers inactive players.\n";
 
-// 2. Delete rooms with no players
-$res = db_prepare($conn, "DELETE FROM rooms WHERE id NOT IN (SELECT DISTINCT room_id FROM players)");
-echo "Deleted empty rooms.\n";
+    // 2. Delete rooms with no players
+    $deletedRooms = DB::query("DELETE FROM rooms WHERE id NOT IN (SELECT DISTINCT room_id FROM players)")->rowCount();
+    echo "Deleted $deletedRooms empty rooms.\n";
 
-// 3. Delete old messages (older than 24 hours)
-$res = db_prepare($conn, "DELETE FROM messages WHERE created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)");
-echo "Cleaned up old messages.\n";
+    // 3. Delete old messages (older than 24 hours)
+    $deletedMessages = DB::query("DELETE FROM messages WHERE created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)")->rowCount();
+    echo "Cleaned up $deletedMessages old messages.\n";
 
-// 4. Delete old strokes (older than 24 hours)
-// Strokes are the heaviest data, keeping them indefinitely will bloat the DB
-$res = db_prepare($conn, "DELETE FROM strokes WHERE created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)");
-echo "Cleaned up old strokes.\n";
+    // 4. Delete old strokes (older than 24 hours)
+    $deletedStrokes = DB::query("DELETE FROM strokes WHERE created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)")->rowCount();
+    echo "Cleaned up $deletedStrokes old strokes.\n";
 
-// 5. Optimize tables
-mysqli_query($conn, "OPTIMIZE TABLE strokes, messages, players, rooms, rounds");
+    // 5. Optimize tables (MySQL specific)
+    DB::query("OPTIMIZE TABLE strokes, messages, players, rooms, rounds");
+    echo "Optimized tables.\n";
 
-echo "Cleanup complete!\n";
-?>
+    echo "Cleanup complete!\n";
+
+} catch (Exception $e) {
+    echo "Cleanup failed: " . $e->getMessage() . "\n";
+    Logger::log("Cleanup Error: " . $e->getMessage(), 'ERROR');
+}

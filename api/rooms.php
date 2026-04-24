@@ -79,12 +79,14 @@ if ($action === 'create') {
     }
 
     // 3. Add Player
+    $max_order = DB::fetch("SELECT MAX(turn_order) as m FROM players WHERE room_id = ?", [$room['id']])['m'] ?? -1;
     $token = bin2hex(random_bytes(16));
     $pid = DB::insert('players', [
         'room_id' => $room['id'],
         'username' => $username,
         'avatar' => $avatar,
         'is_host' => 0,
+        'turn_order' => $max_order + 1,
         'session_token' => $token
     ]);
 

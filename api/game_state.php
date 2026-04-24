@@ -116,6 +116,32 @@ try {
                        [date('Y-m-d H:i:s', $now), $end_time_dr, $round['id']]);
         }
         elseif ($round['status'] === 'drawing') {
+            // Hint Logic (Reveal letters at 50% and 75% elapsed)
+            $total_dur = (int)($room['round_duration'] ?: 60);
+            $hints = !empty($round['hints_mask']) ? explode(',', $round['hints_mask']) : [];
+            $thresholds = [0.5, 0.75];
+            
+            foreach ($thresholds as $idx => $t) {
+                if ($elapsed >= ($total_dur * $t) && count($hints) < ($idx + 1)) {
+                    $word_row = DB::fetch("SELECT word FROM words WHERE id = ?", [$round['word_id']]);
+                    if ($word_row) {
+                        $word = $word_row['word'];
+                        $indices = [];
+                        for ($i = 0; $i < mb_strlen($word); $i++) {
+                            $char = mb_substr($word, $i, 1);
+                            if ($char !== ' ' && !in_array($i, $hints)) {
+                                $indices[] = $i;
+                            }
+                        }
+                        if (!empty($indices)) {
+                            $new_hint = $indices[array_rand($indices)];
+                            $hints[] = $new_hint;
+                            DB::query("UPDATE rounds SET hints_mask = ? WHERE id = ?", [implode(',', $hints), $round['id']]);
+                        }
+                    }
+                }
+            }
+
             if ($timeLeft <= 0) {
                 // Award points to drawer for successful guesses
                 $guesses = DB::fetch("SELECT COUNT(DISTINCT player_id) as c FROM messages WHERE round_id = ? AND type = 'guess'", [$round['id']])['c'];
@@ -187,13 +213,23 @@ if ($round) {
             // Masking logic
             $hints = !empty($round['hints_mask']) ? explode(',', $round['hints_mask']) : [];
             $masked = "";
-            for($i=0;$i<strlen($word);$i++) {
-                if ($word[$i] == ' ') $masked .= "  ";
-                elseif (in_array($i, $hints)) $masked .= $word[$i] . " ";
-                else $masked .= "_ ";
+            $display_word = $word;
+            for($i=0;$i<mb_strlen($display_word);$i++) {
+                $char = mb_substr($display_word, $i, 1);
+                if ($char == ' ') {
+                    $masked .= "   "; // Wide gap for word separator
+                } elseif (in_array($i, $hints)) {
+                    $masked .= $char;
+                } else {
+                    $masked .= "_";
+                }
             }
+            $word_len = mb_strlen(str_replace(' ', '', $display_word));
             $current_round['word'] = trim($masked);
+            $current_round['word_len'] = $word_len;
         }
+    } else {
+        $current_round['word_len'] = 0;
     }
 
     if ($round['status'] == 'choosing' && $round['drawer_id'] == $player_id) {
@@ -212,14 +248,30 @@ jsonResponse([
 ]);
 
 function startNextTurn($room_id) {
-    $done = DB::fetch("SELECT COUNT(*) as c FROM rounds WHERE room_id = ? AND status NOT IN ('game_over', 'choosing')", [$room_id])['c'];
-    $room = DB::fetch("SELECT max_rounds FROM rooms WHERE id = ?", [$room_id]);
-    $players = DB::fetchAll("SELECT id FROM players WHERE room_id = ? ORDER BY turn_order ASC, id ASC", [$room_id]);
-    
+    $room = DB::fetch("SELECT * FROM rooms WHERE id = ?", [$room_id]);
+    $players = DB::fetchAll("SELECT id, turn_order FROM players WHERE room_id = ? ORDER BY turn_order ASC, id ASC", [$room_id]);
     $num = count($players);
     if ($num == 0) return;
 
+    $lastRound = DB::fetch("SELECT * FROM rounds WHERE room_id = ? AND status != 'game_over' ORDER BY id DESC LIMIT 1", [$room_id]);
+    
+    $drawer = $players[0]['id']; // Default to first player
+    if ($lastRound && $lastRound['drawer_id']) {
+        $lastDrawer = DB::fetch("SELECT turn_order FROM players WHERE id = ?", [$lastRound['drawer_id']]);
+        if ($lastDrawer) {
+            $lastOrder = (int)$lastDrawer['turn_order'];
+            // Find next player with turn_order > lastOrder
+            $nextPlayer = DB::fetch("SELECT id FROM players WHERE room_id = ? AND turn_order > ? ORDER BY turn_order ASC LIMIT 1", [$room_id, $lastOrder]);
+            if ($nextPlayer) {
+                $drawer = $nextPlayer['id'];
+            }
+        }
+    }
+
+    // Determine global round number based on rounds completed vs player count
+    $done = DB::fetch("SELECT COUNT(*) as c FROM rounds WHERE room_id = ? AND status NOT IN ('game_over', 'choosing')", [$room_id])['c'];
     $global = floor($done / $num) + 1;
+
     if ($global > $room['max_rounds']) {
         DB::query("UPDATE rooms SET status = 'finished' WHERE id = ?", [$room_id]);
         $end_time_go = date('Y-m-d H:i:s', time() + 15);
@@ -228,7 +280,6 @@ function startNextTurn($room_id) {
     }
 
     DB::query("UPDATE rooms SET current_round = ? WHERE id = ?", [$global, $room_id]);
-    $drawer = $players[$done % $num]['id'];
     $opts = DB::fetchAll("SELECT id FROM words ORDER BY RAND() LIMIT 3");
     $opt_str = implode(',', array_column($opts, 'id'));
 
