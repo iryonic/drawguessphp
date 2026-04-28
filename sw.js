@@ -1,93 +1,81 @@
-const CACHE_NAME = 'draw-guess-v19_STABLE';
+/**
+ * DrawGuess PWA Service Worker
+ * Enhanced caching strategy with automatic updates.
+ */
+
+const CACHE_VERSION = 'v' + new Date().getTime(); // Unique version on every SW change
+const CACHE_NAME = 'draw-guess-' + CACHE_VERSION;
+
 const STATIC_ASSETS = [
+    './',
     'manifest.json',
     'assets/pwa/icon-512.png'
 ];
 
-// File types that should NEVER be served from cache (always live)
-// This prevents stale JS/PHP from breaking the game after updates
-const NEVER_CACHE = ['.js', '.php'];
-
-function shouldNeverCache(url) {
-    return NEVER_CACHE.some(ext => url.pathname.endsWith(ext));
-}
-
-// 1. Install - Pre-cache only static assets (icons, manifest)
+// 1. Install - Pre-cache critical assets
 self.addEventListener('install', event => {
+    self.skipWaiting(); // Force the waiting service worker to become the active service worker
     event.waitUntil(
-        caches.open(CACHE_NAME).then(async cache => {
-            console.log('SW v19: Installing...');
-            for (const url of STATIC_ASSETS) {
-                try {
-                    const response = await fetch(url, { redirect: 'follow' });
-                    if (response.ok) await cache.put(url, response);
-                } catch (err) {
-                    console.warn('SW: Failed to cache:', url);
-                }
-            }
+        caches.open(CACHE_NAME).then(cache => {
+            return cache.addAll(STATIC_ASSETS);
         })
     );
-    self.skipWaiting();
 });
 
-// 2. Activate - Cleanup old caches immediately
+// 2. Activate - Cleanup old caches
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(keys => {
-            return Promise.all(keys.map(key => {
-                if (key !== CACHE_NAME) {
-                    console.log('SW: Deleting old cache:', key);
-                    return caches.delete(key);
-                }
-            }));
+            return Promise.all(
+                keys.map(key => {
+                    if (key !== CACHE_NAME) {
+                        return caches.delete(key);
+                    }
+                })
+            );
+        }).then(() => {
+            return self.clients.claim(); // Take control of all pages immediately
         })
     );
-    self.clients.claim();
 });
 
-// 3. Fetch Strategy
+// 3. Fetch Strategy: Network First for PHP/API, Stale-While-Revalidate for Assets
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    // Only handle http/https (ignore chrome-extension etc.)
-    if (!url.protocol.startsWith('http')) return;
-
-    // NETWORK-ONLY: API calls and all POST requests
-    if (url.pathname.includes('/api/') || event.request.method !== 'GET') {
+    // Only handle GET requests and http/https protocols
+    if (event.request.method !== 'GET' || !url.protocol.startsWith('http')) {
         return;
     }
 
-    // NETWORK-FIRST: JS and PHP files — always fresh, fallback to cache if offline
-    // This is the key fix: prevents stale game.js from being served after updates
-    if (shouldNeverCache(url)) {
+    // NETWORK ONLY: API calls
+    if (url.pathname.includes('/api/')) {
+        return;
+    }
+
+    // NETWORK FIRST: PHP pages (always fresh)
+    if (url.pathname.endsWith('.php') || url.pathname.endsWith('/')) {
         event.respondWith(
             fetch(event.request)
-                .then(networkResponse => {
-                    // Update the cache with the fresh response for offline use
-                    if (networkResponse && networkResponse.status === 200) {
-                        const clone = networkResponse.clone();
-                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-                    }
-                    return networkResponse;
-                })
-                .catch(() => caches.match(event.request)) // Offline fallback
+                .catch(() => caches.match(event.request))
         );
         return;
     }
 
-    // CACHE-FIRST: Static assets (images, fonts, manifest)
-    // Serve from cache instantly, update in background (stale-while-revalidate)
+    // STALE-WHILE-REVALIDATE: CSS, JS, Images
+    // Note: Since we use PHP versioning (filemtime), the URL will change when the file updates.
+    // This naturally bypasses the cache for updated files.
     event.respondWith(
-        caches.match(event.request).then(cachedResponse => {
-            const fetchPromise = fetch(event.request).then(networkResponse => {
-                if (networkResponse && networkResponse.status === 200) {
-                    const clone = networkResponse.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-                }
-                return networkResponse;
-            }).catch(() => cachedResponse);
-
-            return cachedResponse || fetchPromise;
+        caches.open(CACHE_NAME).then(cache => {
+            return cache.match(event.request).then(response => {
+                const fetchPromise = fetch(event.request).then(networkResponse => {
+                    if (networkResponse.ok) {
+                        cache.put(event.request, networkResponse.clone());
+                    }
+                    return networkResponse;
+                });
+                return response || fetchPromise;
+            });
         })
     );
 });

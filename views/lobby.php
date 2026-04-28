@@ -20,7 +20,7 @@
     <script>
         const APP_ROOT = '<?= rtrim($base_path, "/") . "/" ?>';
     </script>
-    <script src="<?= $base_path ?>js/pwa.js?v=STABLE_V17"></script>
+    <script src="<?= View::asset('js/pwa.js') ?>"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -152,8 +152,8 @@
     </div>
 
     <!-- Scripts -->
-    <script src="<?= $base_path ?>js/sounds.js?v=NUCLEAR_RESET"></script>
-    <script src="<?= $base_path ?>js/lobby.js?v=NUCLEAR_RESET"></script>
+    <script src="<?= View::asset('js/sounds.js') ?>"></script>
+    <script src="<?= View::asset('js/lobby.js') ?>"></script>
 
     <!-- Modals -->
     <?php include __DIR__ . '/modals/create_room.php'; ?>

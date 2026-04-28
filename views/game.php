@@ -16,7 +16,7 @@
     <script>
         const APP_ROOT = '<?= $base_path ?>';
     </script>
-    <script src="<?= $base_path ?>js/pwa.js?v=STABLE_V17"></script>
+    <script src="<?= View::asset('js/pwa.js') ?>"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -338,7 +338,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-    <script src="<?= $base_path ?>js/sounds.js?v=NUCLEAR_RESET"></script>
-    <script src="<?= $base_path ?>js/game.js?v=NUCLEAR_RESET"></script>
+    <script src="<?= View::asset('js/sounds.js') ?>"></script>
+    <script src="<?= View::asset('js/game.js') ?>"></script>
 </body>
 </html>

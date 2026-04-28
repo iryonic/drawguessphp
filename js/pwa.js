@@ -3,6 +3,8 @@
  */
 (function() {
     let deferredPrompt;
+    let refreshing = false;
+
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
@@ -64,8 +66,20 @@
         deferredPrompt = null;
     });
 
-    // Register SW
+    // Register SW and handle updates
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register(APP_ROOT + 'sw.js?v=V17').catch(err => console.error('SW Error:', err));
+        navigator.serviceWorker.register(APP_ROOT + 'sw.js').then(reg => {
+            // Check for updates periodically
+            setInterval(() => {
+                reg.update();
+            }, 60 * 60 * 1000); // Check every hour
+        }).catch(err => console.error('SW Error:', err));
+
+        // Reload the page when a new service worker takes control
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (refreshing) return;
+            refreshing = true;
+            window.location.reload();
+        });
     }
 })();

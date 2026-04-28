@@ -199,6 +199,16 @@ class View {
             throw new Exception("View $path not found");
         }
     }
+
+    /**
+     * Asset helper for cache busting
+     */
+    public static function asset($path) {
+        global $base_path;
+        $realPath = __DIR__ . '/../' . ltrim($path, '/');
+        $version = file_exists($realPath) ? filemtime($realPath) : time();
+        return $base_path . ltrim($path, '/') . '?v=' . $version;
+    }
 }
 
 // Initialize tables if missing

@@ -1,6 +1,23 @@
 RewriteEngine On
 DirectoryIndex index.php
 
+# 0. Modern Caching: Ensure Service Worker and Manifest are never stale
+<FilesMatch "(\.js|sw\.js|manifest\.json)$">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "max-age=0, no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </IfModule>
+</FilesMatch>
+
+# Enable caching for static assets but with short duration if not versioned
+<FilesMatch "\.(css|png|jpg|jpeg|gif|ico|svg|mp3|ogg)$">
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault "access plus 1 week"
+    </IfModule>
+</FilesMatch>
+
 # 0. Modern Security: Block sensitive files (e.g., .env)
 RedirectMatch 404 /\.git
 RedirectMatch 404 /\.env
