@@ -42,7 +42,7 @@
 
         <div class="flex items-center gap-4 mt-4 sm:mt-0">
             <div class="h-8 w-[2px] bg-gray-100 hidden sm:block"></div>
-            <a href="auth.php?logout=1" class="border-2 border-ink px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-pop-red active:translate-y-0.5 transition-all shadow-[3px_3px_0px_#000]">
+            <a href="<?= APP_ROOT ?>admin/auth.php?logout=1" class="border-2 border-ink px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-pop-red active:translate-y-0.5 transition-all shadow-[3px_3px_0px_#000]">
                 Sign Out
             </a>
         </div>
