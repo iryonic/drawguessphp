@@ -1306,6 +1306,22 @@ async function leaveRoom() {
     sessionStorage.clear(); // Clear all game session data
     window.location.href = APP_ROOT;
 }
+async function copyRoomCode() {
+    const code = document.getElementById('room-code-display').textContent;
+    const shareUrl = window.location.href; // Direct link to room
+
+    try {
+        await navigator.clipboard.writeText(shareUrl);
+        const tooltip = document.getElementById('copy-tooltip');
+        if (tooltip) {
+            tooltip.classList.remove('opacity-0');
+            setTimeout(() => tooltip.classList.add('opacity-0'), 2000);
+        }
+        try { sfx.play('pop'); } catch (e) { }
+    } catch (err) {
+        console.error('Failed to copy: ', err);
+    }
+}
 window.selectWord = selectWord;
 window.startGame = startGame;
 window.syncState = syncState;
@@ -1318,6 +1334,7 @@ window.undoAction = undoAction;
 window.clearCanvasAction = clearCanvasAction;
 window.toggleMusicUI = toggleMusicUI;
 window.leaveRoom = leaveRoom;
+window.copyRoomCode = copyRoomCode;
 
 // --- Engine Start ---
 updateBrushPreview();
