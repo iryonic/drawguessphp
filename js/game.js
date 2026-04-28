@@ -694,7 +694,7 @@ function showTurnNotification() {
         ui.turnNotif.classList.remove('opacity-0');
         setTimeout(() => {
             if (ui.turnNotif) ui.turnNotif.classList.add('opacity-0');
-        }, 2000);
+        }, 1000);
     }
 }
 
