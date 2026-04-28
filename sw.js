@@ -48,8 +48,8 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // NETWORK ONLY: API calls
-    if (url.pathname.includes('/api/')) {
+    // NETWORK ONLY: API and Admin calls
+    if (url.pathname.includes('/api/') || url.pathname.includes('/admin/')) {
         return;
     }
 
