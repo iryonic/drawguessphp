@@ -15,7 +15,7 @@ function escapeHTML(str) {
         .replace(/'/g, "&#039;");
 }
 
-const player = JSON.parse(localStorage.getItem('dg_player') || '{}');
+const player = JSON.parse(sessionStorage.getItem('dg_player') || '{}');
 
 // Recovery: Check URL for room code and compare with session
 const urlParams = window.location.pathname.split('/');
@@ -441,7 +441,7 @@ async function syncState() {
             console.error("Session Integrity Check Failed:", res.error);
             window.sessionFailCount = (window.sessionFailCount || 0) + 1;
             if (window.sessionFailCount > 3) {
-                localStorage.removeItem('dg_player'); 
+                sessionStorage.removeItem('dg_player'); 
                 const redirectUrl = urlRoom ? APP_ROOT + '?join=' + urlRoom : APP_ROOT;
                 window.location.href = redirectUrl;
             }
@@ -1305,7 +1305,7 @@ async function leaveRoom() {
         });
     } catch (e) { console.error("Leave error:", e); }
 
-    localStorage.removeItem('dg_player');
+    sessionStorage.removeItem('dg_player');
     sessionStorage.clear(); // Clear all game session data
     window.location.href = APP_ROOT;
 }

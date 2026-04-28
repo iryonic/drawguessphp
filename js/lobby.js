@@ -114,7 +114,7 @@ async function confirmCreateRoom() {
 
     if (res.success) {
         sfx.play('start');
-        localStorage.setItem('dg_player', JSON.stringify(res.data));
+        sessionStorage.setItem('dg_player', JSON.stringify(res.data));
         window.location.href = APP_ROOT + 'room/' + res.data.room_code;
     } else {
         showError(res.error || 'Failed to create room');
@@ -143,7 +143,7 @@ async function joinRoom() {
 
     if (res.success) {
         sfx.play('start');
-        localStorage.setItem('dg_player', JSON.stringify(res.data));
+        sessionStorage.setItem('dg_player', JSON.stringify(res.data));
         window.location.href = APP_ROOT + 'room/' + res.data.room_code;
     } else {
         showError(res.error || 'Failed to join room');
