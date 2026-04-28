@@ -7,8 +7,13 @@
 require_once 'db.php';
 
 // 0. Player Pruning (Heartbeat) - Remove players inactive for > 180 seconds (3 mins)
-// This keeps the sessions clean while allowing for longer page refreshes.
 DB::query("DELETE FROM players WHERE last_active < DATE_SUB(NOW(), INTERVAL 180 SECOND)");
+
+// Probabilistic Cleanup (Approx 1 in 500 requests)
+if (mt_rand(1, 500) === 1) {
+    define('INTERNAL_CLEANUP', true);
+    include 'cleanup.php';
+}
 
 // 1. Authentication
 $token = $_POST['token'] ?? '';
