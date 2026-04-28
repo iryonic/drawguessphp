@@ -1309,9 +1309,10 @@ async function leaveRoom() {
     sessionStorage.clear(); // Clear all game session data
     window.location.href = APP_ROOT;
 }
-async function copyRoomCode() {
+async function copyRoomCode(e) {
+    if (e) e.stopPropagation();
     const code = document.getElementById('room-code-display').textContent;
-    const shareUrl = window.location.href; // Direct link to room
+    const shareUrl = window.location.origin + APP_ROOT + '?join=' + code; 
 
     try {
         await navigator.clipboard.writeText(shareUrl);

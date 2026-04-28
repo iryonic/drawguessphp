@@ -91,7 +91,7 @@
         <!-- Logo & Room Code -->
         <div class="flex items-center gap-2 sm:gap-4 shrink-0">
             <h1 class="hidden lg:block font-black text-2xl italic tracking-tighter transform -rotate-1 bg-pop-yellow px-3 py-1 border-[3px] border-ink shadow-[4px_4px_0px_#000] float-anim">DRAWGUESS</h1>
-            <div onclick="copyRoomCode()" class="relative flex items-center gap-2 md:gap-3 bg-white border-[2.5px] border-ink rounded-xl px-2.5 md:px-4 py-1.5 md:py-2 cursor-pointer hover:bg-pop-blue transition-all active:translate-y-1 active:shadow-none shadow-[3px_3px_0px_#000] group">
+            <a href="<?= $base_path ?>?join=<?= $room_code ?>" target="_blank" onclick="copyRoomCode(event)" class="relative flex items-center gap-2 md:gap-3 bg-white border-[2.5px] border-ink rounded-xl px-2.5 md:px-4 py-1.5 md:py-2 cursor-pointer hover:bg-pop-blue transition-all active:translate-y-1 active:shadow-none shadow-[3px_3px_0px_#000] group no-underline text-ink">
                 <span id="room-code-display" class="font-mono font-black text-sm md:text-xl tracking-widest uppercase"><?= $room_code ?></span>
                 <span class="text-xs md:text-base opacity-40 group-hover:opacity-100 transition-opacity">📋</span>
                 
@@ -99,7 +99,7 @@
                 <div id="copy-tooltip" class="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-ink text-white text-[10px] font-black py-1 px-3 rounded-lg opacity-0 transition-opacity pointer-events-none">
                     COPIED!
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Word/Status (Floating HUD) -->
