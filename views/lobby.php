@@ -76,15 +76,19 @@
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-4 py-12">
+    <!-- Connection Lost Banner -->
+    <div id="conn-lost-banner" class="fixed top-0 left-0 right-0 z-[200] bg-red-600 text-white py-2 px-4 flex items-center justify-center gap-2 transform -translate-y-full transition-transform duration-300 font-bold text-xs sm:text-sm">
+        <span class="animate-pulse">⚠️</span> Connection Lost. Reconnecting...
+    </div>
 
     <div class="w-full max-w-xl z-10 flex flex-col items-center gap-6 sm:gap-10">
         
         <!-- Header -->
         <div class="text-center space-y-2 sm:space-y-6 px-4">
-            <div class="inline-block px-3 py-1 sm:px-4 sm:py-1.5 rounded-full border-[2px] md:border-[3px] border-black bg-pop-orange text-black text-[9px] sm:text-xs font-black tracking-widest transform -rotate-1 shadow-[2px_2px_0px_#000] md:shadow-[4px_4px_0px_#000]">
+            <div class="inline-block px-3 py-1 sm:px-4 sm:py-1.5 rounded-full border-[2px] md:border-[3px] border-black bg-pop-orange text-black text-[12px] sm:text-xs font-black tracking-widest transform -rotate-1 shadow-[2px_2px_0px_#000] md:shadow-[4px_4px_0px_#000]">
                 🖊️ Beetle System
             </div>
-            <h1 class="text-3xl sm:text-5xl md:text-7xl font-black leading-tight tracking-tight text-ink drop-shadow-sm">
+            <h1 class="text-4xl sm:text-5xl md:text-7xl font-black leading-tight tracking-tight text-ink drop-shadow-sm">
                 Draw. <span class="marker-highlight">Guess.</span> <br/>
                 <span class="text-xl sm:text-4xl md:text-5xl font-bold text-gray-400 mt-1 md:mt-2 block transform rotate-1">& Fun</span>
             </h1>

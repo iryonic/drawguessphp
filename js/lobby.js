@@ -2,10 +2,28 @@ const avatarList = document.getElementById('avatar-list');
 const avatarInput = document.getElementById('selected-avatar');
 let avatars = [];
 
+// Connectivity Tracking
+let consecutiveFetchFailures = 0;
+function handleFetchResult(success) {
+    const banner = document.getElementById('conn-lost-banner');
+    if (!banner) return;
+    
+    if (success) {
+        consecutiveFetchFailures = 0;
+        banner.classList.add('-translate-y-full');
+    } else {
+        consecutiveFetchFailures++;
+        if (consecutiveFetchFailures >= 2) { 
+            banner.classList.remove('-translate-y-full');
+        }
+    }
+}
+
 // Init Avatars
 async function loadAvatars() {
     try {
         const res = await (await fetch(APP_ROOT + 'api/avatars.php')).json();
+        handleFetchResult(true);
         console.log("Avatars Loaded:", res);
 
         if (res.success && res.data && Array.isArray(res.data) && res.data.length > 0) {
@@ -16,6 +34,7 @@ async function loadAvatars() {
         }
         renderAvatars();
     } catch (e) {
+        handleFetchResult(false);
         console.error("Failed to load avatars", e);
         avatars = ['🐱', '🐶', '🦁', '🦊', '🐸', '🐼', '🐨', '🐷'];
         renderAvatars();
@@ -60,8 +79,11 @@ async function apiRequest(endpoint, data) {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams(data)
         });
-        return await res.json();
+        const json = await res.json();
+        handleFetchResult(true);
+        return json;
     } catch (e) {
+        handleFetchResult(false);
         return { success: false, error: 'Network error or invalid JSON' };
     }
 }

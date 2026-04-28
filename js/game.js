@@ -103,6 +103,26 @@ let gameState = {
     tool: 'pen'   // 'pen' | 'fill'
 };
 
+// Connectivity Tracking
+let consecutiveFetchFailures = 0;
+function handleFetchResult(success) {
+    const banner = document.getElementById('conn-lost-banner');
+    if (!banner) return;
+    
+    if (success) {
+        if (consecutiveFetchFailures >= 3) {
+            console.log("Connection Restored.");
+        }
+        consecutiveFetchFailures = 0;
+        banner.classList.add('-translate-y-full');
+    } else {
+        consecutiveFetchFailures++;
+        if (consecutiveFetchFailures >= 3) {
+            banner.classList.remove('-translate-y-full');
+        }
+    }
+}
+
 // Game Persist Logic
 function updatePersist() {
     sessionStorage.setItem('dg_lastStrokeId', gameState.lastStrokeId);
@@ -388,6 +408,7 @@ async function sendStrokes() {
         body: new URLSearchParams(data)
     });
     const res = await response.json();
+    handleFetchResult(true);
     
     // Update lastStrokeId to prevent syncDraw from fetching our own stroke back
     if (res.success && res.data && res.data.id) {
@@ -397,6 +418,9 @@ async function sendStrokes() {
             updatePersist();
         }
     }
+} catch (e) {
+    handleFetchResult(false);
+}
 }
 
 
@@ -417,6 +441,7 @@ async function syncState() {
                 localStorage.removeItem('dg_player'); 
                 window.location.href = APP_ROOT;
             }
+            handleFetchResult(true);
             return;
         }
         window.sessionFailCount = 0; 
@@ -425,7 +450,10 @@ async function syncState() {
             if (ui.roomCode) ui.roomCode.textContent = res.data.room.room_code || '????';
         }
 
-        if (!res.data) return;
+        if (!res.data) {
+            handleFetchResult(true);
+            return;
+        }
         const data = res.data;
 
         // Round Change / Data Sync
@@ -590,8 +618,11 @@ async function syncState() {
             showResults(data.players);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
+        
+        handleFetchResult(true);
     } catch (e) {
         console.error("SyncState Error:", e);
+        handleFetchResult(false);
     }
 }
 
@@ -786,6 +817,7 @@ async function syncDraw() {
 
     try {
         const res = await (await fetch(`${APP_ROOT}api/draw_sync.php?token=${player.token}&action=fetch&last_id=${gameState.lastStrokeId}`)).json();
+        handleFetchResult(true);
         if (res.data && res.data.strokes) {
             res.data.strokes.sort((a, b) => a.id - b.id);
             res.data.strokes.forEach(s => {
@@ -794,7 +826,9 @@ async function syncDraw() {
             });
             updatePersist();
         }
-    } catch (e) { }
+    } catch (e) {
+        handleFetchResult(false);
+    }
 }
 
 function handleIncomingMessage(m) {
@@ -867,11 +901,14 @@ function handleIncomingMessage(m) {
 async function syncChat() {
     try {
         const res = await (await fetch(`${APP_ROOT}api/chat.php?token=${player.token}&action=fetch&last_id=${gameState.lastMsgId}`)).json();
+        handleFetchResult(true);
         if (res.data && res.data.messages) {
             res.data.messages.forEach(handleIncomingMessage);
             updatePersist();
         }
-    } catch (e) { }
+    } catch (e) { 
+        handleFetchResult(false);
+    }
 }
 
 // Helper Functions

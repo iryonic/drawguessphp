@@ -81,6 +81,10 @@
     </style>
 </head>
 <body class="fixed inset-0 w-full h-[100dvh] flex flex-col">
+    <!-- Connection Lost Banner -->
+    <div id="conn-lost-banner" class="fixed top-0 left-0 right-0 z-[200] bg-red-600 text-white py-2 px-4 flex items-center justify-center gap-2 transform -translate-y-full transition-transform duration-300 font-bold text-xs sm:text-sm">
+        <span class="animate-pulse">⚠️</span> Connection Lost. Reconnecting...
+    </div>
 
     <!-- Header / Top Bar -->
     <header class="h-[var(--header-h)] glass-header border-b-[3px] border-ink flex items-center justify-between px-3 md:px-8 shrink-0 z-50 relative gap-2">
