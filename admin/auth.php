@@ -6,6 +6,11 @@
  */
 
 if (session_status() === PHP_SESSION_NONE) {
+    // Prevent caching of sensitive admin pages
+    header("Cache-Control: no-cache, no-store, must-revalidate");
+    header("Pragma: no-cache");
+    header("Expires: 0");
+    
     // Secure session settings (Prevent CSRF/Hijacking)
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);

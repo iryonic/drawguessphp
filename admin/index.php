@@ -215,6 +215,13 @@ $rooms = DB::fetchAll("
             try {
                 // Self-request to get updated data (using a silent query)
                 const res = await fetch(window.location.href);
+                
+                // If we got redirected (session lost/logged out), force reload
+                if (res.redirected || res.url.includes('login')) {
+                    window.location.reload();
+                    return;
+                }
+
                 const html = await res.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
