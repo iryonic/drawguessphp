@@ -479,6 +479,7 @@ async function syncState() {
         const isMe = data.me == data.round.drawer_id;
         const wasMe = gameState.myTurn;
         gameState.myTurn = (gameState.status === 'drawing' && isMe);
+        updateBrushPreview();
 
         if (gameState.myTurn && !wasMe && gameState.status === 'drawing') {
             showTurnNotification();
@@ -1082,10 +1083,8 @@ function setSize(s) {
 
 function setTool(tool) {
     gameState.tool = tool;
-    // Update cursor
-    if (canvas) {
-        canvas.style.cursor = tool === 'fill' ? 'cell' : 'crosshair';
-    }
+    updateBrushPreview(); // This will now handle the cursor update
+    
     // Update active state on toolbar buttons
     document.querySelectorAll('.tool-btn').forEach(btn => {
         btn.classList.toggle('ring-2', btn.dataset.tool === tool);
@@ -1189,8 +1188,26 @@ function updateBrushPreview() {
     const preview = document.getElementById('brush-preview');
     if (preview) {
         preview.style.backgroundColor = gameState.color;
-        preview.style.width = gameState.size + 'px';
-        preview.style.height = gameState.size + 'px';
+        preview.style.width = Math.max(8, gameState.size) + 'px';
+        preview.style.height = Math.max(8, gameState.size) + 'px';
+    }
+
+    // Dynamic Canvas Cursor
+    if (canvas) {
+        if (!gameState.myTurn) {
+            canvas.style.cursor = 'default';
+        } else if (gameState.tool === 'fill') {
+            canvas.style.cursor = 'cell';
+        } else {
+            // Create a colored dot cursor
+            // We use a slightly larger cursor than the actual brush for visibility, 
+            // but capped at a reasonable size (browsers have limits for custom cursors)
+            const size = Math.min(32, Math.max(12, parseInt(gameState.size) + 4));
+            const half = size / 2;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${half}" cy="${half}" r="${half - 1.5}" fill="${gameState.color}" stroke="white" stroke-width="1.5"/><circle cx="${half}" cy="${half}" r="${half - 0.5}" fill="none" stroke="black" stroke-width="0.5" opacity="0.3"/></svg>`;
+            const cursorUrl = 'data:image/svg+xml;base64,' + btoa(svg);
+            canvas.style.cursor = `url(${cursorUrl}) ${half} ${half}, crosshair`;
+        }
     }
 }
 function clearCanvasAction() {
