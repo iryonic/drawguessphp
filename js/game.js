@@ -432,8 +432,6 @@ async function syncState() {
         if (data.round.id != gameState.roundId) {
             if (data.round.id > 0 && data.round.id > gameState.roundId) {
                 gameState.lastStrokeId = 0;
-                gameState.lastMsgId = 0;
-                processedMsgIds.clear();
                 strokeHistory = [];
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 updatePersist();
