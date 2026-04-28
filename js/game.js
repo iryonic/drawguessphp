@@ -1298,11 +1298,12 @@ async function leaveRoom() {
         await fetch(`${APP_ROOT}api/rooms.php`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ token: player.token, action: 'leave_room' })
+            body: new URLSearchParams({ token: player.token, action: 'leave' })
         });
     } catch (e) { console.error("Leave error:", e); }
 
     localStorage.removeItem('dg_player');
+    sessionStorage.clear(); // Clear all game session data
     window.location.href = APP_ROOT;
 }
 window.selectWord = selectWord;
