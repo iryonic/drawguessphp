@@ -36,6 +36,8 @@
                      <option value="<?= APP_ROOT ?>admin/music" <?= $current=='music.php'?'selected':'' ?>>Music</option>
                      <option value="<?= APP_ROOT ?>admin/feedbacks" <?= $current=='feedbacks.php'?'selected':'' ?>>Feedbacks</option>
                      <option value="<?= APP_ROOT ?>admin/profile" <?= $current=='profile.php'?'selected':'' ?>>Profile</option>
+                     <option value="<?= APP_ROOT ?>" <?= $current=='profile.php'?'selected':'' ?>>Game Lobby</option>
+
                  </select>
             </div>
         </div>
