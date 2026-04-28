@@ -80,55 +80,55 @@
     <div class="w-full max-w-xl z-10 flex flex-col items-center gap-6 sm:gap-10">
         
         <!-- Header -->
-        <div class="text-center space-y-3 sm:space-y-6">
-            <div class="inline-block px-4 py-1.5 rounded-full border-[2.5px] md:border-[3px] border-black bg-pop-orange text-black text-[10px] md:text-xs font-black tracking-widest transform -rotate-1 shadow-[3px_3px_0px_#000] md:shadow-[4px_4px_0px_#000]">
+        <div class="text-center space-y-2 sm:space-y-6 px-4">
+            <div class="inline-block px-3 py-1 sm:px-4 sm:py-1.5 rounded-full border-[2px] md:border-[3px] border-black bg-pop-orange text-black text-[9px] sm:text-xs font-black tracking-widest transform -rotate-1 shadow-[2px_2px_0px_#000] md:shadow-[4px_4px_0px_#000]">
                 🖊️ Beetle System
             </div>
             <h1 class="text-3xl sm:text-5xl md:text-7xl font-black leading-tight tracking-tight text-ink drop-shadow-sm">
                 Draw. <span class="marker-highlight">Guess.</span> <br/>
-                <span class="text-2xl sm:text-4xl md:text-5xl font-bold text-gray-400 mt-1 md:mt-2 block transform rotate-1">& Fun</span>
+                <span class="text-xl sm:text-4xl md:text-5xl font-bold text-gray-400 mt-1 md:mt-2 block transform rotate-1">& Fun</span>
             </h1>
         </div>
 
         <!-- Lobby Card -->
-        <div class="fun-card w-full p-5 sm:p-8 md:p-10 relative bg-white">
-            <div id="error-msg" class="hidden bg-red-50 border-[2.5px] md:border-[3px] border-red-500 text-red-700 p-3 sm:p-4 rounded-xl md:rounded-2xl mb-6 sm:mb-8 text-xs sm:text-sm text-center font-bold">
+        <div class="fun-card w-full p-4 sm:p-8 md:p-10 relative bg-white mx-auto">
+            <div id="error-msg" class="hidden bg-red-50 border-[2px] md:border-[3px] border-red-500 text-red-700 p-2.5 sm:p-4 rounded-lg md:rounded-2xl mb-4 sm:mb-8 text-[10px] sm:text-sm text-center font-bold">
                 🚫 <span id="error-text">Nickname required!</span>
             </div>
 
-            <div id="setup-form" class="space-y-6 sm:space-y-8">
+            <div id="setup-form" class="space-y-4 sm:space-y-8">
                 <!-- Avatar Selector -->
                 <div>
-                    <div class="flex justify-between items-center px-1 mb-2 sm:mb-3">
-                        <label class="text-[10px] sm:text-xs font-black text-gray-600 uppercase tracking-[0.2em]">Select Avatar</label>
-                        <span class="text-[9px] sm:text-[10px] text-gray-300 italic bold">Swipe →</span>
+                    <div class="flex justify-between items-center px-1 mb-1.5 sm:mb-3">
+                        <label class="text-[9px] sm:text-xs font-black text-gray-600 uppercase tracking-[0.2em]">Select Avatar</label>
+                        <span class="text-[8px] sm:text-[10px] text-gray-300 italic bold">Swipe →</span>
                     </div>
-                    <div class="flex gap-3 sm:gap-4 overflow-x-auto pb-4 px-1 no-scrollbar" id="avatar-list"></div>
+                    <div class="flex gap-2 sm:gap-4 overflow-x-auto pb-3 px-1 no-scrollbar" id="avatar-list"></div>
                     <input type="hidden" id="selected-avatar" value="🐱">
                 </div>
 
                 <!-- Nickname -->
                 <div>
                     <input type="text" id="username" 
-                        class="fun-input w-full px-4 sm:px-6 py-3.5 sm:py-5 text-lg sm:text-2xl font-black text-ink text-center placeholder:text-gray-200" 
+                        class="fun-input w-full px-4 sm:px-6 py-3 sm:py-5 text-base sm:text-2xl font-black text-ink text-center placeholder:text-gray-200" 
                         maxlength="15"
                         placeholder="NICKNAME">
                 </div>
 
                 <!-- Action Buttons -->
-                <div class="space-y-3 sm:space-y-4 pt-1 sm:pt-2">
+                <div class="space-y-2.5 sm:space-y-4 pt-1">
                     <button onclick="openCreateModal()" 
-                        class="w-full btn-pop bg-pop-blue font-black py-4 sm:py-5 rounded-xl sm:rounded-2xl text-lg sm:text-xl uppercase tracking-widest">
+                        class="w-full btn-pop bg-pop-blue font-black py-3.5 sm:py-5 rounded-lg sm:rounded-2xl text-base sm:text-xl uppercase tracking-widest">
                         🚀 Create Room
                     </button>
                     
-                    <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    <div class="flex flex-col sm:flex-row gap-2.5 sm:gap-4">
                         <input type="text" id="room-code-input" 
-                            class="fun-input flex-1 px-4 py-3 sm:py-4 text-center uppercase tracking-[0.3em] font-mono font-black text-base sm:text-xl" 
+                            class="fun-input flex-1 px-4 py-3 sm:py-4 text-center uppercase tracking-[0.2em] sm:tracking-[0.3em] font-mono font-black text-sm sm:text-xl" 
                             maxlength="10"
                             placeholder="CODE">
                         <button onclick="joinRoom()" 
-                            class="btn-pop w-full sm:w-auto px-6 sm:px-10 py-3 sm:py-4 bg-pop-pink font-black rounded-xl sm:rounded-2xl text-lg sm:text-xl">
+                            class="btn-pop w-full sm:w-auto px-6 sm:px-10 py-3 sm:py-4 bg-pop-pink font-black rounded-lg sm:rounded-2xl text-base sm:text-xl">
                             JOIN
                         </button>
                     </div>

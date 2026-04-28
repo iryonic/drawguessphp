@@ -221,42 +221,44 @@
                     <div id="canvas-toasts" class="absolute top-4 left-4 right-4 z-40 pointer-events-none flex flex-col items-start gap-2"></div>
 
                     <!-- Game Over / Results Screen -->
-                    <div id="results-screen" class="absolute inset-0 z-[110] hidden bg-pop-blue flex flex-col items-center justify-center p-4 text-center overflow-hidden">
-                        <div class="relative w-full max-w-2xl">
-                            <h2 class="text-4xl md:text-7xl font-black text-white uppercase tracking-tighter mb-8 drop-shadow-[6px_6px_0px_#000]">GAME OVER!</h2>
+                    <div id="results-screen" class="absolute inset-0 z-[110] hidden bg-pop-blue flex flex-col items-center justify-center p-2 sm:p-4 text-center overflow-hidden">
+                        <div class="relative w-full max-w-2xl flex flex-col items-center">
+                            <h2 class="text-3xl sm:text-5xl md:text-7xl font-black text-white uppercase tracking-tighter mb-4 sm:mb-8 drop-shadow-[4px_4px_0px_#000] md:drop-shadow-[6px_6px_0px_#000] px-2">GAME OVER!</h2>
                             
                             <!-- Podium Container -->
-                            <div id="podium" class="flex items-end justify-center gap-2 md:gap-4 mb-12 min-h-[300px]">
+                            <div id="podium" class="flex items-end justify-center gap-1 sm:gap-4 mb-8 sm:mb-12 min-h-[200px] sm:min-h-[300px] w-full px-2">
                                 <!-- 2nd Place -->
-                                <div class="flex flex-col items-center group">
-                                    <div id="winner-2-avatar" class="text-4xl md:text-6xl mb-2 animate-bounce transition-all duration-500 delay-100">🥈</div>
-                                    <div class="bg-white border-[4px] border-ink p-2 md:p-4 rounded-t-2xl w-24 md:w-36 h-32 md:h-48 flex flex-col items-center justify-end shadow-[6px_6px_0px_#000]">
-                                        <div id="winner-2-name" class="font-black text-[10px] md:text-sm uppercase truncate w-full mb-1">---</div>
-                                        <div id="winner-2-score" class="font-black text-sm md:text-xl text-pop-pink">0</div>
-                                        <div class="mt-2 font-black text-2xl md:text-4xl text-gray-200">2</div>
+                                <div class="flex flex-col items-center group w-1/3 max-w-[120px]">
+                                    <div id="winner-2-avatar" class="text-3xl sm:text-5xl md:text-6xl mb-1 sm:mb-2 animate-bounce transition-all duration-500 delay-100">🥈</div>
+                                    <div class="bg-white border-[3px] md:border-[4px] border-ink p-1 sm:p-4 rounded-t-xl sm:rounded-t-2xl w-full h-24 sm:h-32 md:h-48 flex flex-col items-center justify-end shadow-[4px_4px_0px_#000] md:shadow-[6px_6px_0px_#000]">
+                                        <div id="winner-2-name" class="font-black text-[8px] sm:text-[10px] md:text-sm uppercase truncate w-full mb-0.5 sm:mb-1 px-1">---</div>
+                                        <div id="winner-2-score" class="font-black text-xs sm:text-sm md:text-xl text-pop-pink">0</div>
+                                        <div class="mt-1 sm:mt-2 font-black text-xl sm:text-2xl md:text-4xl text-gray-200">2</div>
                                     </div>
                                 </div>
                                 <!-- 1st Place -->
-                                <div class="flex flex-col items-center group z-10 -translate-y-4">
-                                    <div id="winner-1-avatar" class="text-6xl md:text-8xl mb-2 animate-bounce transition-all duration-500">🥇</div>
-                                    <div class="bg-pop-yellow border-[4px] border-ink p-2 md:p-4 rounded-t-2xl w-28 md:w-44 h-44 md:h-64 flex flex-col items-center justify-end shadow-[8px_8px_0px_#000]">
-                                        <div id="winner-1-name" class="font-black text-xs md:text-lg uppercase truncate w-full mb-1 text-center">---</div>
-                                        <div id="winner-1-score" class="font-black text-lg md:text-2xl text-pop-pink">0</div>
-                                        <div class="mt-2 font-black text-4xl md:text-6xl text-white/50">1</div>
+                                <div class="flex flex-col items-center group z-10 -translate-y-2 sm:-translate-y-4 w-1/3 max-w-[150px]">
+                                    <div id="winner-1-avatar" class="text-5xl sm:text-7xl md:text-8xl mb-1 sm:mb-2 animate-bounce transition-all duration-500">🥇</div>
+                                    <div class="bg-pop-yellow border-[3px] md:border-[4px] border-ink p-1 sm:p-4 rounded-t-xl sm:rounded-t-2xl w-full h-36 sm:h-44 md:h-64 flex flex-col items-center justify-end shadow-[5px_5px_0px_#000] md:shadow-[8px_8px_0px_#000]">
+                                        <div id="winner-1-name" class="font-black text-[10px] sm:text-xs md:text-lg uppercase truncate w-full mb-0.5 sm:mb-1 text-center px-1">---</div>
+                                        <div id="winner-1-score" class="font-black text-sm sm:text-lg md:text-2xl text-pop-pink">0</div>
+                                        <div class="mt-1 sm:mt-2 font-black text-3xl sm:text-4xl md:text-6xl text-white/50">1</div>
                                     </div>
                                 </div>
                                 <!-- 3rd Place -->
-                                <div class="flex flex-col items-center group">
-                                    <div id="winner-3-avatar" class="text-3xl md:text-5xl mb-2 animate-bounce transition-all duration-500 delay-200">🥉</div>
-                                    <div class="bg-white border-[4px] border-ink p-2 md:p-4 rounded-t-2xl w-20 md:w-32 h-24 md:h-36 flex flex-col items-center justify-end shadow-[4px_4px_0px_#000]">
-                                        <div id="winner-3-name" class="font-black text-[10px] md:text-xs uppercase truncate w-full mb-1">---</div>
-                                        <div id="winner-3-score" class="font-black text-xs md:text-lg text-pop-pink">0</div>
-                                        <div class="mt-2 font-black text-xl md:text-3xl text-gray-100">3</div>
+                                <div class="flex flex-col items-center group w-1/3 max-w-[100px]">
+                                    <div id="winner-3-avatar" class="text-2xl sm:text-4xl md:text-5xl mb-1 sm:mb-2 animate-bounce transition-all duration-500 delay-200">🥉</div>
+                                    <div class="bg-white border-[3px] md:border-[4px] border-ink p-1 sm:p-4 rounded-t-xl sm:rounded-t-2xl w-full h-16 sm:h-24 md:h-36 flex flex-col items-center justify-end shadow-[3px_3px_0px_#000] md:shadow-[4px_4px_0px_#000]">
+                                        <div id="winner-3-name" class="font-black text-[7px] sm:text-[10px] md:text-xs uppercase truncate w-full mb-0.5 sm:mb-1 px-1">---</div>
+                                        <div id="winner-3-score" class="font-black text-[10px] sm:text-xs md:text-lg text-pop-pink">0</div>
+                                        <div class="mt-1 sm:mt-2 font-black text-lg sm:text-xl md:text-3xl text-gray-100">3</div>
                                     </div>
                                 </div>
                             </div>
-
-                            <button onclick="window.location.href='index.php'" class="neo-btn bg-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-lg hover:bg-pop-yellow transition-all active:translate-y-1">Return to Lobby 🏠</button>
+                            
+                            <div class="flex flex-col sm:flex-row gap-3 w-full max-w-md px-4">
+                                <button onclick="window.location.href='index.php'" class="neo-btn flex-1 bg-white px-4 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-sm sm:text-lg hover:bg-pop-yellow transition-all active:translate-y-1">Return to Lobby 🏠</button>
+                            </div>
                         </div>
                     </div>
                 </div>
