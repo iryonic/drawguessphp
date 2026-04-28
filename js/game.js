@@ -376,7 +376,8 @@ async function sendStrokes() {
     if (painting && pointsBuffer.length === 1) return;
 
     const pointsToSend = [...pointsBuffer]; // Copy points to prevent reference issues
-    const data = {
+    try {
+        const data = {
         token: player.token,
         action: 'draw',
         color: gameState.color,
