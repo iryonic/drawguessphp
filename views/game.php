@@ -257,7 +257,7 @@
                             </div>
                             
                             <div class="flex flex-col sm:flex-row gap-3 w-full max-w-md px-4">
-                                <button onclick="window.location.href='index.php'" class="neo-btn flex-1 bg-white px-4 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-sm sm:text-lg hover:bg-pop-yellow transition-all active:translate-y-1">Return to Lobby 🏠</button>
+                                <button onclick="window.location.href=window.APP_ROOT || '/'" class="neo-btn flex-1 bg-white px-4 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-sm sm:text-lg hover:bg-pop-yellow transition-all active:translate-y-1">Return to Lobby 🏠</button>
                             </div>
                         </div>
                     </div>

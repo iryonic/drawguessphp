@@ -69,7 +69,7 @@ self.addEventListener('fetch', event => {
         caches.open(CACHE_NAME).then(cache => {
             return cache.match(event.request).then(response => {
                 const fetchPromise = fetch(event.request).then(networkResponse => {
-                    if (networkResponse.ok) {
+                    if (networkResponse.status === 200) {
                         cache.put(event.request, networkResponse.clone());
                     }
                     return networkResponse;
