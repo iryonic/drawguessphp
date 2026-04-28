@@ -151,3 +151,18 @@ async function joinRoom() {
 }
 
 // End of Lobby Script
+
+// Handle auto-join from URL parameter
+(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const inviteCode = urlParams.get('join');
+    if (inviteCode) {
+        const roomInput = document.getElementById('room-code-input');
+        if (roomInput) {
+            roomInput.value = inviteCode.toUpperCase();
+            // Highlight the field to show it's pre-filled
+            roomInput.classList.add('bg-pop-blue/10');
+            roomInput.classList.add('border-pop-blue');
+        }
+    }
+})();

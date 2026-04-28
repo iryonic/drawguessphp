@@ -26,7 +26,9 @@ if (urlRoom && player.room_code !== urlRoom.toUpperCase()) {
     // If mismatch, try to reload but don't force redirect yet, syncState will handle 401
 }
 
-if (!player.token && !urlRoom) {
+if (!player.token && urlRoom) {
+    window.location.href = APP_ROOT + '?join=' + urlRoom;
+} else if (!player.token && !urlRoom) {
     window.location.href = APP_ROOT || './';
 }
 
@@ -440,7 +442,8 @@ async function syncState() {
             window.sessionFailCount = (window.sessionFailCount || 0) + 1;
             if (window.sessionFailCount > 3) {
                 localStorage.removeItem('dg_player'); 
-                window.location.href = APP_ROOT;
+                const redirectUrl = urlRoom ? APP_ROOT + '?join=' + urlRoom : APP_ROOT;
+                window.location.href = redirectUrl;
             }
             handleFetchResult(true);
             return;
